@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro&display=swap');
+
+*{
+    box-sizing: border-box;
+    font-family: "Be Vietnam Pro", sans-serif;
+    font-size: 16px;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    overflow-x: hidden;
+}
+
+/**************************** main ********************************/
+
+.pages{
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
+.page{
+    position: absolute;
+    border: 2px solid black;
+    width: 40vw;
+    height: 100vh;
+}
+
+.translate-l{
+    transform: translateX(-35vw) scale(0.9) perspective(5000px) rotateY(-65deg);
+    z-index: 2;
+    transition: 0.5s transform;
+}
+
+.not-translate{
+    z-index: 3;
+    transform: translateX(0) scale(1);
+    transition: 0.5s transform;
+}
+
+.translate-r{
+    transform: translateX(35vw) scale(0.90) perspective(5000px) rotateY(65deg);
+    z-index: 1;
+    transition: 0.5s transform;
+}
+
+.turn-page{
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    height: 100vh;
+    z-index: 4;
+}
+
+.turn-left, .turn-right{
+    width: 30vw;
+}
+
+.turn-left {
+    transform: translateX(-4vw) scale(0.95) perspective(5000px) rotateY(-30deg);  
+    background: linear-gradient(90deg, rgb(90, 90, 90)0%, rgba(0, 0, 0, 0.0) 100%);
+}
+
+.turn-left:hover, .turn-right:hover{
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.turn-right{
+    transform: translateX(4vw) scale(0.95) perspective(5000px) rotateY(30deg);
+    background: linear-gradient(-90deg, rgb(90, 90, 90) 0%, rgba(0, 0, 0, 0.0) 100%);
+}
