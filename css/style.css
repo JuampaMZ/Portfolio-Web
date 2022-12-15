@@ -21,10 +21,18 @@ body {
 }
 
 .page{
-    position: absolute;
+    position: relative;
     border: 2px solid black;
     width: 40vw;
-    height: 100vh;
+    height: inherit;
+}
+
+.page-1{
+    left: 33vw;
+}
+
+.page-3{
+    right: 33vw;
 }
 
 .translate-l{
@@ -46,11 +54,12 @@ body {
 }
 
 .turn-page{
-    position: sticky;
-    bottom: 0;
+    position: absolute;
+    top: 0px;
     display: flex;
     justify-content: space-between;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     z-index: 4;
 }
 
