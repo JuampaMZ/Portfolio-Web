@@ -12,31 +12,33 @@ body {
     overflow-x: hidden;
 }
 
+#nav-hard-skills img {
+    max-width: 110px;
+    width: 5vw;
+    min-width: 70px;
+}
+
 /**************************** main ********************************/
 
 .pages{
     position: relative;
     display: flex;
     justify-content: center;
+    margin-top: 300px;
+    margin-bottom: 2000px;
+    height: 1500px;
+
 }
 
 .page{
-    position: relative;
+    position: absolute;
     border: 2px solid black;
-    width: 40vw;
     height: inherit;
-}
-
-.page-1{
-    left: 33vw;
-}
-
-.page-3{
-    right: 33vw;
+    width: 65vw;
 }
 
 .translate-l{
-    transform: translateX(-35vw) scale(0.9) perspective(5000px) rotateY(-65deg);
+    transform: translateX(-45vw) scale(0.7) perspective(5000px) rotateY(-65deg);
     z-index: 2;
     transition: 0.5s transform;
 }
@@ -48,7 +50,7 @@ body {
 }
 
 .translate-r{
-    transform: translateX(35vw) scale(0.90) perspective(5000px) rotateY(65deg);
+    transform: translateX(45vw) scale(0.7) perspective(5000px) rotateY(65deg);
     z-index: 1;
     transition: 0.5s transform;
 }
@@ -64,19 +66,59 @@ body {
 }
 
 .turn-left, .turn-right{
-    width: 30vw;
+    width: 35vw;
 }
 
 .turn-left {
-    transform: translateX(-4vw) scale(0.95) perspective(5000px) rotateY(-30deg);  
+    transform: translateX(-10vw) scale(0.95) perspective(5000px) rotateY(-60deg);  
     background: linear-gradient(90deg, rgb(90, 90, 90)0%, rgba(0, 0, 0, 0.0) 100%);
 }
 
 .turn-left:hover, .turn-right:hover{
     background-color: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
 }
 
 .turn-right{
-    transform: translateX(4vw) scale(0.95) perspective(5000px) rotateY(30deg);
+    transform: translateX(10vw) scale(0.95) perspective(5000px) rotateY(60deg);
     background: linear-gradient(-90deg, rgb(90, 90, 90) 0%, rgba(0, 0, 0, 0.0) 100%);
+}
+
+.img-plus-name{
+    margin: 10vw 0vw;
+}
+
+.img-profile {
+    min-width: 100px;
+    width: 15vw;
+    max-width: 250px;
+    min-height: 100px;
+    height: 15vw;
+    max-height: 250px;
+}
+
+.bg-1 {
+    background-image: url(../img/bg-1.jpg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    filter: blur(4px) sepia(0%) saturate(130%);
+/*     hue-rotate(deg) */
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+.arrow{
+    position: sticky;
+    margin: 20vh 0vw 20vh 15vw;
+    top: 50vh;
+}
+
+.arrow svg{
+    transform: scale(2);
+}
+
+.arrow-left{
+    margin: 20vh 15vw 20vh 0vw;
+    transform: rotateY(180deg);
 }
