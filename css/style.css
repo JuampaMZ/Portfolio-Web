@@ -51,7 +51,7 @@
 /**************************** header *******************************/
 
 .header{
-    width: 100%;
+    width: 100vw;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -348,6 +348,7 @@
     position: relative;
     display: flex;
     justify-content: center;
+    width: 100vw;
     margin: 30vh 0px 20vh 0px;
 }
 
@@ -651,11 +652,11 @@
 .constancia-sembrando{
     position: absolute;
     width: 100vw;
-    height: 100vh;
+    height: 120vh;
     z-index: 90;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     overflow: hidden;
     background-color: rgba(0, 0, 0, 0.608);
 }
@@ -665,6 +666,7 @@
 }
 
 .constancia-sembrando img{
+    margin-top: 20vh;
     width: 50vw;
     min-width: 350px;
 }
