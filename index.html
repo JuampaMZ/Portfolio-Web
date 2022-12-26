@@ -5,27 +5,116 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="">
+    <link rel="icon" href="img/portfolio.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="stylesheet" href="css/style.css">
-    <title>PORTAFOLIO - JPM</title>
+    <title>Portfolio - JPM</title>
 </head>
 
-<body>
-    <header></header>
+<body class="body d-flex flex-column">
+    <div class="bg-body"></div>
+    <header class="header bg-light">
+        <nav class="header-nav ">
+            <div class="header-nav-div-logo text-dark">
+                JPM.
+            </div>
+            <ul class="header-nav-ul">
+                <li class="header-nav-ul-li">
+                    <a class="header-nav-ul-li-a text-dark" href="#">Descargar CV</a>
+                </li>
+                <li class="header-nav-ul-li text-dark drop-cv-monitor">
+                    <a class="header-nav-ul-li-a text-dark drop-cv-monitor">CV Web<svg class="arrow-nav" xmlns="http://www.w3.org/2000/svg" width="11" height="20"><path fill-rule="evenodd" d="M.366 19.708c.405.39 1.06.39 1.464 0l8.563-8.264a1.95 1.95 0 0 0 0-2.827L1.768.292A1.063 1.063 0 0 0 .314.282a.976.976 0 0 0-.011 1.425l7.894 7.617a.975.975 0 0 1 0 1.414L.366 18.295a.974.974 0 0 0 0 1.413"/></svg></a>
+                    <ul class="ul-inside">
+                        <li class="ul-inside-li"><a class="header-nav-ul-li-a ul-inside-li-a text-dark abilities-cv" href="#">HABILIDADES</a></li>
+                        <li class="ul-inside-li"><a class="header-nav-ul-li-a ul-inside-li-a text-dark education-cv" href="#">EDUCACION</a></li>
+                        <li class="ul-inside-li"><a class="header-nav-ul-li-a ul-inside-li-a text-dark projects-cv" href="#">PROYECTOS</a></li>
+                    </ul>
+                </li>
+                <li class="header-nav-ul-li">
+                    <a class="header-nav-ul-li-a dark-mode text-dark">Dark mode</a>
+                    <a class="header-nav-ul-li-a dark-mode text-dark d-none">Light mode</a>
+                </li>
+                <li class="header-nav-ul-li">
+                    <a class="header-nav-ul-li-a text-dark" href="#contact">Contacto</a>
+                </li>
+            </ul>
+            <div class="nav-hamburger">
+                <svg class="nav-hamburger-img" xmlns="http://www.w3.org/2000/svg" width="25" height="18"><g fill-rule="evenodd"><path  d="M0 0h25v4H0zM0 7h25v4H0zM0 14h25v4H0z"/></g></svg>
+            </div>
+        </nav>
+        <nav class="header-nav-mobile bg-light">
+            <div class="cross">
+                <svg class="cross-svg" xmlns="http://www.w3.org/2000/svg" width="96" height="96"><switch><g><path d="m53.657 48 25.171-25.172a4 4 0 1 0-5.656-5.656L48 42.343 22.829 17.172a4 4 0 0 0-5.657 5.656L42.344 48 17.172 73.172a4 4 0 1 0 5.657 5.656L48 53.657l25.172 25.171C73.953 79.609 74.977 80 76 80s2.048-.391 2.828-1.172a4 4 0 0 0 0-5.656L53.657 48z"/></g></switch></svg>
+            </div>
+            <ul class="header-nav-ul-mobile">
+                <li class="header-nav-ul-li-mobile">
+                    <a class="header-nav-ul-li-a-mobile text-dark" href="#">Descargar CV</a>
+                </li>
+                <li class="header-nav-ul-li-mobile drop-cv">
+                    <a class="header-nav-ul-li-a-mobile drop-cv text-dark">
+                        CV Web
+                        <svg class="arrow-nav-mobile" xmlns="http://www.w3.org/2000/svg" width="11" height="20"><path fill-rule="evenodd" d="M.366 19.708c.405.39 1.06.39 1.464 0l8.563-8.264a1.95 1.95 0 0 0 0-2.827L1.768.292A1.063 1.063 0 0 0 .314.282a.976.976 0 0 0-.011 1.425l7.894 7.617a.975.975 0 0 1 0 1.414L.366 18.295a.974.974 0 0 0 0 1.413"/></svg>
+                    </a>
+                    <ul class="ul-inside-mobile">
+                        <li class="ul-inside-li-mobile"><a class="header-nav-ul-li-a-mobile ul-inside-li-a-mobile text-dark abilities-cv" href="#">HABILIDADES</a> </li>
+                        <li class="ul-inside-li-mobile"><a class="header-nav-ul-li-a-mobile ul-inside-li-a-mobile text-dark education-cv" href="#">EDUCACION</a></li>
+                        <li class="ul-inside-li-mobile"><a class="header-nav-ul-li-a-mobile ul-inside-li-a-mobile text-dark projects-cv" href="#">PROYECTOS</a></li>
+                    </ul>
+                </li>
+                
+                <li class="header-nav-ul-li-mobile">
+                    <a class="header-nav-ul-li-a-mobile dark-mode text-dark">Dark mode</a>
+                    <a class="header-nav-ul-li-a-mobile dark-mode text-dark d-none">Light mode</a>
+                </li>
+                <li class="header-nav-ul-li-mobile">
+                    <a class="header-nav-ul-li-a-mobile text-dark contact" href="#contact">Contacto</a>
+                </li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- <header><a href="img/Constancia-de-egreso-Sembrando.jpg" download="Nombre-del-archivo"> Descargar CV </a></header> -->
 
     <main class="main">
-
         <div class="pages">
-            <section class="page translate-l page-1"> 
 
-
+            <section class="page translate-l bg-light shadow-strong border border-2 border-dark"> 
+                <div class="p-5 d-flex flex-column flex-md-row justify-content-around align-items-center position-relative">
+                    <div class="bg-2 position-absolute"></div>
+                    <div class="my-5 position-relative">
+                        <p class="pt-5 fs-2 fw-bold text-white">MIS PROYECTOS / TRABAJOS</p>
+                        <hr class="bg-light">
+                    </div>
+                </div>
+                <div class="projects-container-grid pt-5">
+                    <div class="project-1 project d-flex flex-column align-items-center">
+                        <div class="bg-project-1 bg-project"></div>
+                        <div class="pt-2 text-dark"><b>PROTAFOLIO ACTUAL</b></div>
+                    </div>
+                    <div class="project-2 project d-flex flex-column align-items-center">
+                        <div class="bg-project-2 bg-project"></div>
+                        <div class="pt-2 text-dark"><b>PAGINA WEB ANIMANIA</b></div>
+                    </div>
+                    <div class="project-3 project d-flex flex-column align-items-center">
+                        <div class="bg-project-3 bg-project"></div>
+                        <div class="pt-2 text-dark"><b>EXAMEN FRONT END 1</b></div>
+                    </div>
+                    <div class="project-4 project d-flex flex-column align-items-center">
+                        <div class="bg-project-4 bg-project"></div>
+                        <div class="pt-2 text-dark"><b>APP WEB BUSCANDOSALUD</b></div>
+                    </div>
+                    <div class="project-5 project">
+                        <div class="bg-project-5 bg-project"></div>
+                        <div></div>
+                    </div>
+                </div>
             </section>
-            <section class="page page-2 not-translate bg-light shadow-strong border border-2 border-dark">
+
+            <section class="page not-translate bg-light shadow-strong border border-2 border-dark z-index-3">
                 <div>
                     <div class="d-flex position-relative">
                         <div class="d-flex flex-column align-items-center w-100 flex-md-row justify-content-around img-plus-name">
-                            <div class="bg-light shadow-lg rounded rounded-circle p-2 ">
+                            <div class="bg-light shadow-lg rounded rounded-circle p-1 mb-5 mb-md-0">
                                 <img class="img-profile rounded-circle" src="img/profile.jpg" alt="img-porfile">
                             </div>
                             <div class="">
@@ -38,50 +127,129 @@
                     </div>
                     <div>
                         <section class="py-4 px-4 p-sm-5 d-flex flex-column align-items-md-start flex-xxl-row align-items-xxl-center">
-                            <div class="bg-dark p-3 rounded-start rounded-end border-top border-bottom border-secondary border-5 mb-xxl-0">
-                                <h2 id="cool" class="fw-bold text-white text-center">PERFIL PERSONAL</h2>
+                            <div class="p-3 rounded-start rounded-end border-top border-bottom border-secondary border-5 mb-xxl-0">
+                                <h2 class="fw-bold text-dark text-center">PERFIL PERSONAL</h2>
                             </div>
                             <hr>
-                            <div class=" p-2 p-sm-4 py-xl-3 rounded-start rounded-end border-start border-end border-dark border-5 d-inline ms-xxl-5 ">
-                                <p class="text-dark text-justify text-wrap">Hola! Soy programador Junior y estoy en busca de mi
-                                    primera experiencia laboral en el mundo IT. Actualmente estoy cursando la carrera de
-                                    Certified Tech Developer y a su vez terminando la carrera de Nutricion. Si bien me gusta
-                                    mucho la nutricion me di cuenta que realmente lo que me apasiona es la programacion y todo
-                                    lo relacionado a esta. </p>
+                            <div class=" p-2 p-sm-4 py-xl-3 rounded-start rounded-end border-start border-end border-secondary border-5 d-inline ms-xxl-5 ">
+                                <p class="text-dark text-justify text-wrap">
+                                    Hola! Soy programador Junior y estoy en busca de mi primera experiencia laboral en el mundo IT. Actualmente estoy cursando la carrera de Certified Tech Developer y a su vez terminando la carrera de Nutricion. Si bien me gusta mucho la nutricion me di cuenta que realmente lo que me apasiona es la programacion y todo lo relacionado a esta. </p>
                             </div>
                         </section>
-                        <section id="hard-skills" class="py-2 px-4 px-sm-5 d-flex flex-column align-items-md-start">
-                            <div class="bg-dark p-3 rounded-start rounded-end border-top border-bottom border-secondary border-5 ">
-                                <h2 class="fw-bold text-white text-center">HABILIDADES TÉCNICAS</h2>
+                        <section class="py-2 px-4 px-sm-5 d-flex flex-column align-items-md-start">
+                            <div class="p-3 rounded-start rounded-end border-top border-bottom border-secondary border-5 ">
+                                <h2 class="fw-bold text-dark text-center">HABILIDADES TÉCNICAS</h2>
                             </div>
                             <hr>
-                            <div class="p-2 p-sm-4 py-xl-3 d-flex w-100 flex-column flex-wrap justify-content-around align-items-center flex-md-row">
-                                <div id="nav-hard-skills" class="p-2 d-flex mw justify-content-around align-items-center gap-1">
-                                    <img class="rotacion-sebita drop-shadow" src="svg/html.svg" alt="logo-html">
-                                    <a href="" target="_blank"><img class="drop-shadow" src="svg/css.svg" alt="logo-css"></a>
-                                    <a href="" target="_blank"><img class="rotacion-sebita drop-shadow"
-                                            src="svg/javascript.svg" alt="logo-js"></a>
+                            <div class="d-flex flex-column w-100">
+                                <div class="p-2 p-sm-4 py-xl-3 d-flex w-100 flex-column flex-wrap justify-content-around align-items-center flex-md-row">
+                                    <div class="nav-hard-skills p-2 d-flex mw justify-content-around align-items-center gap-1">
+                                        <img class="drop-shadow" src="svg/html.svg" alt="logo-html">
+                                        <a target="_blank"><img class="drop-shadow" src="svg/css.svg" alt="logo-css"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/javascript.svg" alt="logo-js"></a>
+                                    </div>
+                                    <div class="nav-hard-skills p-2 d-flex align-items-center">
+                                        <a target="_blank"><img class="drop-shadow" src="svg/github.svg" alt="logo-js"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/git.svg" alt="logo-html"></a>
+                                    </div>
+                                    <div class="nav-hard-skills p-2 d-flex mw justify-content-around align-items-center gap-1">
+                                        <a target="_blank"><img class="drop-shadow" src="svg/node-js.svg" alt="logo-nodejs"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/sass.svg" alt="logo-sass"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/typescript.svg" alt="logo-ts"></a>
+                                    </div>
+                                    <div class="nav-hard-skills p-2 d-flex mw justify-content-around align-items-center gap-1">
+                                        <a target="_blank"><img class="drop-shadow" src="svg/python.svg" alt="logo-python"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/flask.svg" alt="logo-flask"></a>
+                                    </div>                                    
+                                    <div class="nav-hard-skills p-2 d-flex align-items-center gap-1">
+                                        <a target="_blank"><img class="drop-shadow" src="svg/bootstrap.svg" alt="logo-css"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/java.svg" alt="logo-js"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/mysql.svg" alt="logo-html"></a>
+                                    </div>
+                                    
                                 </div>
-                                <div id="nav-hard-skills" class="p-2 d-flex align-items-center">
-                                    <a href="" target="_blank"><img class="rotacion-sebita drop-shadow" src="svg/github.svg"
-                                            alt="logo-js"></a>
-                                    <a href="" target="_blank"><img class="drop-shadow" src="svg/git.svg" alt="logo-html"></a>
-                                </div>
-                                <div id="nav-hard-skills" class="p-2 d-flex align-items-center gap-1">
-                                    <a href="" target="_blank"><img class="drop-shadow" src="svg/bootstrap.svg"
-                                            alt="logo-css"></a>
-                                    <a href="" target="_blank"><img class="rotacion-sebita drop-shadow" src="svg/java.svg"
-                                            alt="logo-js"></a>
-                                    <a href="" target="_blank"><img class="drop-shadow" src="svg/mysql.svg" alt="logo-html"></a>
+                                <div class="d-flex flex-column align-items-center gap-2">
+                                    <p class="text-dark">Proximamente...</p>
+                                    <div class="nav-hard-skills p-2 d-flex align-items-center gap-1">
+                                        <a target="_blank"><img class="drop-shadow" src="svg/react.svg" alt="logo-react"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/next-js.svg" alt="logo-next-js"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/mongodb.svg" alt="logo-mongodb"></a>
+                                        <a target="_blank"><img class="drop-shadow" src="svg/aws.svg" alt="logo-mongodb"></a>
+                                    </div>
                                 </div>
                             </div>
+                        </section>
+                        <section class="py-4 px-4 p-sm-5 d-flex flex-column align-items-md-start">
+                            <div
+                                class="p-3 rounded-start rounded-end border-top border-bottom border-secondary border-5 ">
+                                <h2 class="fw-bold text-dark text-center">HABILIDADES BLANDAS</h2>
+                            </div>
+                            <hr>
+                            <ul class="list-all-style d-flex flex-row gap-3 flex-wrap justify-content-start py-2 text-dark">
+                                <div class="d-flex flex-column gap-3">
+                                    <li>Buena comunicación</li>
+                                    <li>Trabajo en equipo</li>
+                                </div>
+                                <div class="d-flex flex-column gap-3">
+                                    <li>Adaptabilidad</li>
+                                    <li>Empatía</li>
+                                </div>
+                            </ul>
                         </section>
                     </div>
                 </div>                                             
             </section>
-            <section class="page translate-r page-3"> 
+            <section class="page translate-r bg-light border border-2 border-dark">
+
+                <div class="p-5 d-flex flex-column flex-md-row justify-content-around align-items-center position-relative">
+                    <div class="bg-3 position-absolute"></div>
+                    <div class="my-5 position-relative">
+                        <p class="pt-5 fs-2 fw-bold text-white">EDUCACION / CERTIFICADOS</p>
+                        <hr class="bg-light">
+                    </div>
+                </div>
+                <div class="education d-flex justify-content-around">
+                    <div class="education-centers d-flex flex-column">
+                        <div class="education-center flex-column flex-md-row text-md-start text-dark">
+                            <div><img src="img/DH.jpg" alt="Digital-House"></div>
+                            <div>DIGITAL HOUSE <br> 2022 - En curso</div> 
+                        </div>
+                        <div class="education-center flex-column flex-md-row text-md-start text-dark">
+                            <div><img src="img/sembrando-TIC.jpg" alt="sembrando-TIC"></div>      
+                            <div>SEMBRANDO TIC <br> 2021 - Finalizado</div> 
+                        </div>
+                        <div class="education-center flex-column flex-md-row text-md-start text-dark">
+                            <div><img src="img/UCU.jpg" alt="UCU"></div>
+                            <div>UNIVERSIDAD CATOLICA DEL URUGUAY <br> 2019 - En curso</div> 
+                        </div>
+                    </div>
+                    <div class="timeline d-flex flex-column align-items-center">
+                        <div class="point rounded-circle"></div>
+                        <div class="point rounded-circle"></div>
+                        <div class="point rounded-circle"></div>
+                    </div>
+                    <div class="careers-names d-flex flex-column">
+                        <div class="career-name text-dark"><b>Certified Tech Developer</b><br> Se trata de un programa educativo diseñado por Mercado Libre, Globant y Digital House para formar desarrolladores siguiendo los más altos estándares de la industria.</div>
+                        <div class="career-name text-dark" ><b>Programador Junior</b> <br> Sembrando TIC es un programa creado junto a 5 socios estratégicos: Cámara Uruguaya de Tecnologías de la Información (CUTI), Globant, Mercado Libre, Banco Interamericano de Desarrollo y ManpowerGroup para formar programadores junior. <a class="link-constancia-sembrando"> Ver constancia de egreso</a></div>
+                        <div class="career-name text-dark"><b>Licenciatura en Nutricion </b><br> Sólida formación humana y académica que te permite tener un rol central en el cuidado de la salud, la prevención y el tratamiento de patologías diversas, mediante la promoción de hábitos alimentarios saludables y terapia nutricional</div>
+                    </div> 
+                </div>
+
+                <section class="py-4 px-4 p-sm-5 d-flex flex-column align-items-md-start">
+                    <div
+                        class="p-3 rounded-start rounded-end border-top border-bottom border-secondary border-5 ">
+                        <h2 class="fw-bold text-dark text-center">IDIOMAS</h2>
+                    </div>
+                    <hr>
+                    <ul class="list-all-style d-flex flex-column gap-3 justify-content-start py-2 text-dark">
+                        <li>Español</li>
+                        <li>Ingles</li>
+                    </ul>
+                </section>
 
             </section>
+
+
             <div class="turn-page">
                 <div class="turn-left">
                     <div class="arrow arrow-left"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="20"><path fill-rule="evenodd" d="M.366 19.708c.405.39 1.06.39 1.464 0l8.563-8.264a1.95 1.95 0 0 0 0-2.827L1.768.292A1.063 1.063 0 0 0 .314.282a.976.976 0 0 0-.011 1.425l7.894 7.617a.975.975 0 0 1 0 1.414L.366 18.295a.974.974 0 0 0 0 1.413"/></svg></div>
@@ -92,9 +260,31 @@
             </div>
         </div>
 
+        <div class="turn-page-mobile">
+            <div class="turn-left-mobile rounded-circle">
+                <div class="arrow-curved-left"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="24"><path d="M28 14c0-7.73-6.27-14-14-14S0 6.27 0 14C0 8.477 4.477 4 10 4s10 4.477 10 10v2h-4l8 8 8-8h-4v-2z"/></svg></div>
+            </div>
+            <div class="turn-right-mobile rounded-circle">
+                <div class="arrow-curved-right"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="24"><path d="M28 14c0-7.73-6.27-14-14-14S0 6.27 0 14C0 8.477 4.477 4 10 4s10 4.477 10 10v2h-4l8 8 8-8h-4v-2z"/></svg></div>
+            </div>
+        </div>
+
     </main>
 
-    <footer></footer>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+    <footer id="contact" class="bg-light p-5 footer">
+        <div>
+            <h2 class="fw-bold text-dark text-center">CONTACTO</h2>
+        </div>
+        <div>
+        </div>
+        <div>
+            <p class="text-dark">juanpablomuttoni@gmail.com</p>
+            <p class="text-dark">linkedin.com/in/juanpablomuttoni</p>
+            <p class="text-dark">Uruguay</p>
+        </div>
+    </footer>
+    <div class="constancia-sembrando d-none"><img src="img/Constancia-de-egreso-Sembrando.jpg" alt="Constancia-de-egreso"> <svg class="position-absolute top-0 end-0 fill-white" xmlns="http://www.w3.org/2000/svg" width="96" height="96"><switch><g><path d="m53.657 48 25.171-25.172a4 4 0 1 0-5.656-5.656L48 42.343 22.829 17.172a4 4 0 0 0-5.657 5.656L42.344 48 17.172 73.172a4 4 0 1 0 5.657 5.656L48 53.657l25.172 25.171C73.953 79.609 74.977 80 76 80s2.048-.391 2.828-1.172a4 4 0 0 0 0-5.656L53.657 48z"/></g></switch></svg></div>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script> -->
     <script src="js/script.js"></script>
 </body>
+</html>
