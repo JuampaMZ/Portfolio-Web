@@ -154,6 +154,7 @@ cross[0].addEventListener("click", show_polygon_remove);
 contact[0].addEventListener("click", show_nav_mobile);
 
 function show_nav_mobile(event) {
+    cross[0].classList.toggle("d-none")
     header_nav_mobile[0].classList.toggle("width-50")
 
 }

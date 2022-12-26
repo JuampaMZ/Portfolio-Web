@@ -370,8 +370,7 @@
 }
 
 .translate-r{
-    transform: translateX(63vw) scale(0.85) perspective(5000px) rotateY(65deg);
-    
+    transform: translateX(45vw) scale(0.85) perspective(5000px) rotateY(83deg);
     transition: 0.5s transform;
 }
 
