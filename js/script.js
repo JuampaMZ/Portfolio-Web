@@ -147,11 +147,14 @@ let nav_hamburger = document.getElementsByClassName("nav-hamburger")
 let header_nav_mobile = document.getElementsByClassName("header-nav-mobile")
 let cross = document.getElementsByClassName("cross")
 let contact = document.getElementsByClassName("contact")
+let download_cv = document.getElementsByClassName("download-cv")
+
 
 nav_hamburger[0].addEventListener("click", show_nav_mobile);
 cross[0].addEventListener("click", show_nav_mobile);
 cross[0].addEventListener("click", show_polygon_remove);
 contact[0].addEventListener("click", show_nav_mobile);
+download_cv[0].addEventListener("click", show_nav_mobile);
 
 function show_nav_mobile(event) {
     cross[0].classList.toggle("d-none")
@@ -175,6 +178,8 @@ let timeline = document.getElementsByClassName("timeline")
 let arrow_turn_monitor = document.getElementsByClassName("arrow-nav")
 let hamburger_svg = document.getElementsByClassName("nav-hamburger-img")
 let bg_project_1 = document.getElementsByClassName("bg-project-1")
+let bg_project_1_mobile = document.getElementsByClassName("bg-project-1-mobile")
+let svg_footer = document.getElementsByClassName("svg-contact")
 
 
 for (let i = 0; i < dark_mode.length; i++) {
@@ -219,11 +224,16 @@ function show_dark(event) {
         dark_mode[i].classList.toggle("d-none")
     }
     bg_project_1[0].classList.toggle("bg-project-1-dark")
+    bg_project_1_mobile[0].classList.toggle("bg-project-1-mobile-dark")
 
     if(event.target.classList.contains("header-nav-ul-li-a-mobile")){
         show_nav_mobile();
     }
+    for (let i = 0; i < svg_footer.length; i++) {
+        svg_footer[i].classList.toggle("svg-contact-dark")
+    }
 }
+
 
 
 let education_cv = document.getElementsByClassName("education-cv")

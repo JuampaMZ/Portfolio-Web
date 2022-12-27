@@ -520,27 +520,26 @@
 
 .projects-container-grid{
     display: grid;
-    grid-template-columns: 60%;
-    grid-auto-rows: auto;
+    grid-template-columns: 80%;
+    grid-auto-rows: 1fr 1fr 1fr 1fr;
     gap: 50px;
     justify-content: center;
     align-items: center;
     place-items: center;
     width: 100%;
-    height: 80%;
+    height: 78%;
     grid-template-areas: 
     "project-1" 
     "project-2"
     "project-3"
-    "project-4"
-    "project-5";
+    "project-4";
 }
 
 .project {
     width: 100%;
     height: 100%;
     background-color: beige;
-    max-width: 300px;
+    max-width: 550px;
 }
 
 .project-dark {
@@ -563,35 +562,55 @@
     grid-area: project-4;
 }
 
-.project-5 {
-    grid-area: project-5;
-}
-
-
-.bg-project {
-    width: 100%;
-    height: 40%;
+.bg-project-mobile {
+    width: 35%;
+    height: 100%;
     background-size: cover;
     background-repeat: no-repeat;
 }
 
+.description{
+    width: 65%;
+    height: auto;
+}
+
 .bg-project-1 {
-    background-image: url(../img/project-portfolio-actual.JPG);
+    display: none;
 }
 
 .bg-project-1-dark{
-    background-image: url(../img/project-portfolio-actual-dark.JPG);
+    display: none;
 }
 
 .bg-project-2 {
-    background-image: url(../img/project-animania.JPG);
+    display: none;
 }
 
 .bg-project-3 {
-    background-image: url(../img/project-exam-front-1.JPG);
+    display: none;
 }
 
 .bg-project-4 {
+    display: none;
+}
+
+.bg-project-1-mobile {
+    background-image: url(../img/project-portfolio-actual-mobile.JPG);
+}
+
+.bg-project-1-mobile-dark {
+    background-image: url(../img/project-portfolio-actual-mobile-dark.JPG);
+}
+
+.bg-project-2-mobile {
+    background-image: url(../img/project-animania-mobile.JPG);
+}
+
+.bg-project-3-mobile {
+    background-image: url(../img/project-exam-front-1-mobile.JPG);
+}
+
+.bg-project-4-mobile {
     background-image: url(../img/project-buscandoSalud.jpg);
 }
 
@@ -684,6 +703,20 @@
     filter: drop-shadow(0px -10px 10px rgba(0, 0, 0, 0.495));
 }
 
+.svg-contact{
+    width: 30px;
+    height: auto;
+}
+
+.svg-contact-dark{
+    fill: white;
+}
+
+.footer-a {
+    cursor: pointer;
+    text-decoration: none;
+}
+
 @media (min-width: 768px) {
     .page{
         width: 65vw;
@@ -762,7 +795,7 @@
 
 }
 
-@media (min-width: 1279px) {
+@media (min-width: 1200px) {
     .bg-3 {
         background-position-y: -15vw;
         
@@ -776,11 +809,14 @@
         justify-content: center;
         align-items: center;
         width: 100%;
-        height: 80%;
+        height: 78%;
         grid-template-areas: 
         "project-1 project-2"
         "project-3 project-4"
         "project-5 project-5";
+    }
+    .project-5 {
+        grid-area: project-5;
     }
 
     .project {
@@ -788,6 +824,64 @@
         height: 100%;
         max-width: 100%;
     }
+
+    .description{
+        width: auto;
+        height: 65%;
+    }
+
+    .bg-project {
+        width: 100%;
+        height: 35%;
+        background-size: cover;
+        background-repeat: no-repeat;
+    }
+
+    .bg-project-1 {
+        display: block;
+        background-image: url(../img/project-portfolio-actual.JPG);
+    }
+    
+    .bg-project-1-dark{
+        display: block;
+        background-image: url(../img/project-portfolio-actual-dark.JPG);
+    }
+
+    .bg-project-2 {
+        display: block;
+        background-image: url(../img/project-animania.JPG);
+    }
+    
+    .bg-project-3 {
+        display: block;
+        background-image: url(../img/project-exam-front-1.JPG);
+    }
+    
+    .bg-project-4 {
+        display: block;
+        background-image: url(../img/project-buscandoSalud.jpg);
+    }
+
+    .bg-project-1-mobile {
+        display: none;
+    }
+    
+    .bg-project-1-mobile-dark {
+        display: none;
+    }
+    
+    .bg-project-2-mobile {
+        display: none;
+    }
+    
+    .bg-project-3-mobile {
+        display: none;
+    }
+    
+    .bg-project-4-mobile {
+        display: none;
+    }
+    
 }
 
 @media (min-width: 1600px) {
