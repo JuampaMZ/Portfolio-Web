@@ -156,10 +156,17 @@ cross[0].addEventListener("click", show_polygon_remove);
 contact[0].addEventListener("click", show_nav_mobile);
 download_cv[0].addEventListener("click", show_nav_mobile);
 
-function show_nav_mobile(event) {
-    cross[0].classList.toggle("d-none")
-    header_nav_mobile[0].classList.toggle("width-50")
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+function show_nav_mobile(event) {
+    header_nav_mobile[0].classList.toggle("width-50")
+    if (cross[0].classList.contains("d-none")){
+        cross[0].classList.toggle("d-none")
+    } else {
+        sleep(300).then(() => {cross[0].classList.toggle("d-none")})
+    }
 }
 
 let bg_1 = document.getElementsByClassName("bg-1")
