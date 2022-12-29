@@ -265,7 +265,7 @@
 }
 
 .translate-l{
-    transform: translateX(-63vw) scale(0.85) perspective(5000px) rotateY(-65deg);
+    transform: translateX(-45vw) scale(0.85) perspective(5000px) rotateY(-80deg);
     transition: 0.5s transform;
 }
 
@@ -789,7 +789,7 @@
     }
 
     .translate-l{
-        transform: translateX(-45vw) scale(0.7) perspective(5000px) rotateY(-65deg);
+        transform: translateX(-43vw) scale(0.7) perspective(5000px) rotateY(-75deg);
         transition: 0.5s transform;
     }
     
@@ -799,7 +799,7 @@
     }
     
     .translate-r{
-        transform: translateX(45vw) scale(0.7) perspective(5000px) rotateY(65deg);
+        transform: translateX(42vw) scale(0.7) perspective(5000px) rotateY(75deg);
         transition: 0.5s transform;
     }
 
