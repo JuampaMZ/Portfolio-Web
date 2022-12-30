@@ -574,6 +574,9 @@
     justify-content: space-around;
 }
 
+.career-name {
+    padding-right: 2vw;
+}
 
 .constancia-sembrando{
     position: absolute;
