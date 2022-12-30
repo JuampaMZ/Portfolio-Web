@@ -48,6 +48,10 @@
     min-width: 50px;
 }
 
+.text-justify{
+    text-align: justify;
+}
+
 /**************************** header *******************************/
 
 .header{
