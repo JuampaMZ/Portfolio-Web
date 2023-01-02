@@ -65,7 +65,7 @@
 /**************************** header *******************************/
 
 .header{
-    width: 100vw;
+    width: 100%;
     display: -webkit-box;
     display: -ms-flexbox;
     display: flex;
@@ -332,7 +332,7 @@
     -webkit-box-pack: center;
         -ms-flex-pack: center;
             justify-content: center;
-    width: 100vw;
+    width: 100%;
     margin: 30vh 0px 20vh 0px;
 }
 
@@ -340,12 +340,12 @@
     position: absolute;
     border: 2px solid black;
     height: inherit;
-    width: 90vw;
+    width: 96.5%;
 }
 
 .translate-l{
-    -webkit-transform: translateX(-45vw) translateZ(-50vw) scale(0.85) perspective(5000px) rotateY(-80deg);
-            transform: translateX(-45vw) translateZ(-50vw) scale(0.85) perspective(5000px) rotateY(-80deg);
+    -webkit-transform: translateX(-42vw) translateZ(-50vw) scale(0.8) perspective(5000px) rotateY(-80deg);
+            transform: translateX(-42vw) translateZ(-50vw) scale(0.8) perspective(5000px) rotateY(-80deg);
     -webkit-transition: 0.5s -webkit-transform;
     transition: 0.5s -webkit-transform;
     -o-transition: 0.5s transform;
@@ -365,8 +365,8 @@
 }
 
 .translate-r{
-    -webkit-transform: translateX(45vw) translateZ(-50vw) scale(0.85) perspective(5000px) rotateY(83deg);
-            transform: translateX(45vw) translateZ(-50vw) scale(0.85) perspective(5000px) rotateY(83deg);
+    -webkit-transform: translateX(42vw) translateZ(-50vw) scale(0.8) perspective(5000px) rotateY(80deg);
+            transform: translateX(42vw) translateZ(-50vw) scale(0.8) perspective(5000px) rotateY(80deg);
     -webkit-transition: 0.5s -webkit-transform;
     transition: 0.5s -webkit-transform;
     -o-transition: 0.5s transform;
@@ -760,6 +760,7 @@
 /**************************** footer *******************************/
 
 .footer {
+    width: 100%;
     -webkit-filter: drop-shadow(0px -10px 10px rgba(0, 0, 0, 0.495));
             filter: drop-shadow(0px -10px 10px rgba(0, 0, 0, 0.495));
 }
@@ -774,6 +775,7 @@
 }
 
 .footer-a {
+    font-size: 15px;
     cursor: pointer;
     text-decoration: none;
 }
@@ -927,6 +929,27 @@
         display: none;
     }
 
+    .turn-left {
+        -webkit-transform: translateX(-25.65%) translateZ(-34vw) scaleY(0.93) perspective(5000px) rotateY(-60deg);
+                transform: translateX(-25.65%) translateZ(-34vw) scaleY(0.93) perspective(5000px) rotateY(-60deg);
+        background: -webkit-gradient(linear, left top, right top, from(rgb(90, 90, 90)), to(rgba(0, 0, 0, 0.0)));  
+        background: -o-linear-gradient(left, rgb(90, 90, 90)0%, rgba(0, 0, 0, 0.0) 100%);  
+        background: linear-gradient(90deg, rgb(90, 90, 90)0%, rgba(0, 0, 0, 0.0) 100%);
+    }
+    
+    .turn-left:hover, .turn-right:hover{
+        background-color: rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+    }
+    
+    .turn-right{
+        -webkit-transform: translateX(25.65%) translateZ(-34vw) scaleY(0.93) perspective(5000px) rotateY(60deg);
+                transform: translateX(25.65%) translateZ(-34vw) scaleY(0.93) perspective(5000px) rotateY(60deg);
+        background: -webkit-gradient(linear, right top, left top, from(rgb(90, 90, 90)), to(rgba(0, 0, 0, 0.0)));
+        background: -o-linear-gradient(right, rgb(90, 90, 90) 0%, rgba(0, 0, 0, 0.0) 100%);
+        background: linear-gradient(-90deg, rgb(90, 90, 90) 0%, rgba(0, 0, 0, 0.0) 100%);
+    }
+
     .turn-page{
         position: absolute;
         top: 0px;
@@ -942,28 +965,7 @@
     }
     
     .turn-left, .turn-right{
-        width: 35vw;
-    }
-    
-    .turn-left {
-        -webkit-transform: translateX(-10vw) translateZ(-34vw) scale(0.95) perspective(5000px) rotateY(-60deg);
-                transform: translateX(-10vw) translateZ(-34vw) scale(0.95) perspective(5000px) rotateY(-60deg);
-        background: -webkit-gradient(linear, left top, right top, from(rgb(90, 90, 90)), to(rgba(0, 0, 0, 0.0)));  
-        background: -o-linear-gradient(left, rgb(90, 90, 90)0%, rgba(0, 0, 0, 0.0) 100%);  
-        background: linear-gradient(90deg, rgb(90, 90, 90)0%, rgba(0, 0, 0, 0.0) 100%);
-    }
-    
-    .turn-left:hover, .turn-right:hover{
-        background-color: rgba(0, 0, 0, 0.3);
-        cursor: pointer;
-    }
-    
-    .turn-right{
-        -webkit-transform: translateX(10vw) translateZ(-34vw) scale(0.95) perspective(5000px) rotateY(60deg);
-                transform: translateX(10vw) translateZ(-34vw) scale(0.95) perspective(5000px) rotateY(60deg);
-        background: -webkit-gradient(linear, right top, left top, from(rgb(90, 90, 90)), to(rgba(0, 0, 0, 0.0)));
-        background: -o-linear-gradient(right, rgb(90, 90, 90) 0%, rgba(0, 0, 0, 0.0) 100%);
-        background: linear-gradient(-90deg, rgb(90, 90, 90) 0%, rgba(0, 0, 0, 0.0) 100%);
+        width: 30%;
     }
 
     .arrow{
