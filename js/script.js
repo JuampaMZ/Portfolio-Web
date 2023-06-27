@@ -115,7 +115,6 @@ function show_constancy(event) {
     let top = (event.pageY - event.y)
     constancia_sembrando[0].style.top = top + 'px'
     overflow_body[0].classList.toggle("overflow-hiden")
-
 }
 
 let polygon = document.getElementsByClassName("drop-cv");
