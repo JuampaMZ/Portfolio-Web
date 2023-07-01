@@ -630,6 +630,11 @@
     text-decoration: none;
 }
 
+.work-list {
+    margin-left: 3vw;
+}
+
+
 /**************************** media querys *******************************/
 
 @media (min-width: 768px) {
