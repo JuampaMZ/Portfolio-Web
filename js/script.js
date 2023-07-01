@@ -220,7 +220,9 @@ function show_dark(event) {
     for (let i = 0; i < points.length; i++) {
         points[i].classList.toggle("point-dark");
     }
-    timeline[0].classList.toggle("timeline-dark")
+    for (let i = 0; i < timeline.length; i++) {
+        timeline[i].classList.toggle("timeline-dark")
+    }
     ul_polygon[0].classList.toggle("ul-inside-mobile-dark")
     ul_inside[0].classList.toggle("ul-inside-dark")
     arrow_turn[0].classList.toggle("arrow-nav-mobile-dark")
