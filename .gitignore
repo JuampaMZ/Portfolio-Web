@@ -3,3 +3,4 @@ dist/
 node_modules/
 .env*
 responsive-preview.html
+revise.mjs
