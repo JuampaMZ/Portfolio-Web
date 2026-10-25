@@ -1,4 +1,5 @@
 import { pointerRotationSpeed, prismLayout, viewportPointerPosition } from './motion.js';
+import { initScrollStory } from './scroll-story.js';
 
 const menuButton = document.querySelector('.menu-toggle');
 const navigation = document.querySelector('#navigation');
@@ -268,3 +269,4 @@ window.addEventListener('hashchange', revealHashTarget);
 revealHashTarget();
 requestAnimationFrame(frame);
 document.querySelector('#year').textContent = new Date().getFullYear();
+initScrollStory();
