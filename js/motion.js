@@ -10,7 +10,7 @@ export function viewportPointerPosition(clientX, viewportWidth) {
 }
 
 export function prismLayout(projectCount, faceWidth) {
-  const faceCount = projectCount > 1 ? projectCount * Math.ceil(6 / projectCount) : 1;
+  const faceCount = projectCount >= 5 ? projectCount : projectCount > 1 ? projectCount * Math.ceil(6 / projectCount) : 1;
   const gap = faceCount > 1 ? Math.max(18, Math.min(36, faceWidth * .075)) : 0;
   return {
     faceCount,

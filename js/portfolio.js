@@ -41,6 +41,7 @@ let manualUntil = 0;
 let turnAnimation = null;
 let previousFrame = 0;
 let contactTimer;
+let activeDemo = null;
 const ticker = document.querySelector('.ticker');
 const tickerTrack = document.querySelector('.ticker-track');
 const tickerGroup = document.querySelector('.ticker-group');
@@ -126,7 +127,7 @@ function filterProjects(category) {
   updateGeometry();
   updateSelection();
   paintRotation();
-  document.querySelector('#filter-status').textContent = `${visible.length} ${visible.length === 1 ? 'proyecto' : 'proyectos'}`;
+  document.querySelector('#filter-status').textContent = `${visible.length} ${visible.length === 1 ? 'tarjeta' : 'tarjetas'}`;
   document.querySelectorAll('.card-navigation button').forEach(button => { button.disabled = visible.length < 2; });
   updatePlayback();
 }
@@ -143,7 +144,7 @@ function frame(time) {
   const elapsed = previousFrame ? Math.min(time - previousFrame, 50) : 0;
   previousFrame = time;
   animateTicker(elapsed);
-  if (!document.hidden && onScreen) {
+  if (!document.hidden && onScreen && !activeDemo) {
     if (turnAnimation) {
       const progress = Math.min((time - turnAnimation.started) / turnAnimation.duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
@@ -249,6 +250,19 @@ motionPreference.addEventListener('change', event => {
 });
 new ResizeObserver(updateGeometry).observe(rotor);
 new IntersectionObserver(entries => { onScreen = entries[0].isIntersecting; },{threshold:.1}).observe(browser);
+document.querySelectorAll('[data-project-total]').forEach(label => { label.textContent = String(projects.length).padStart(2,'0'); });
+rotor.addEventListener('click', event => {
+  const trigger = event.target.closest('[data-demo]');
+  if (!trigger) return;
+  const dialog = document.querySelector(`#demo-${trigger.dataset.demo}`);
+  if (!dialog) return;
+  activeDemo = dialog;
+  dialog.showModal();
+});
+document.querySelectorAll('.project-dialog').forEach(dialog => {
+  dialog.querySelector('[data-close-demo]').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => { activeDemo = null; manualUntil = performance.now() + 3000; });
+});
 filterProjects('all');
 window.addEventListener('hashchange', revealHashTarget);
 revealHashTarget();

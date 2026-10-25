@@ -8,3 +8,5 @@ update-prism.mjs
 update-polygon.mjs
 update-mobile.mjs
 update-copy-nav.mjs
+create-dashboard.mjs
+add-demo-cards.mjs

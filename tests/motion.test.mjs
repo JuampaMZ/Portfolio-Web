@@ -23,9 +23,9 @@ test('viewport margins keep steering active up to both screen edges', () => {
 });
 
 test('polygon has neighboring faces that remain visible beside the central face', () => {
-  for (const count of [2, 3]) {
+  for (const count of [2, 3, 5]) {
     const layout = prismLayout(count, 480);
-    assert.ok(layout.faceCount >= 6);
+    assert.ok(layout.faceCount >= 5);
     assert.equal(layout.faceCount % count, 0);
     assert.ok(layout.step < 90);
     assert.ok(Math.cos(layout.step * Math.PI / 180) > 0);

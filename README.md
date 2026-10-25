@@ -11,7 +11,7 @@ El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publ
 ## Interacciones
 
 - Portada: tarjetas con una zona de enlace fija y un contenedor visual que hace zoom. El zoom no modifica la zona que detecta el mouse.
-- Proyectos: polígono de seis caras que repite los tres proyectos para mantener visibles las caras vecinas. La repetición es visual; los filtros y el contador conservan tres proyectos únicos. Solo la cara activa recibe foco.
+- Proyectos: un polígono muestra cinco tarjetas únicas. Para filtros con dos o tres tarjetas se repiten caras visualmente, manteniendo el contador de elementos únicos. Solo la cara activa recibe foco.
 - Giro automático: lento fuera de la interacción. Al mover el mouse dentro, el centro detiene el giro; hacia los bordes aumenta gradualmente la velocidad, en el sentido correspondiente. Las flechas, el teclado y los gestos permiten avanzar. Hay botón de pausa y soporte de movimiento reducido.
 - Franja: movimiento continuo sin cortes, con velocidad y dirección controladas por el cursor. Se detiene fuera de pantalla, con la pestaña oculta o con preferencia de movimiento reducido.
 - Contacto: botones visibles, desplazamiento suave y animación de llegada.
@@ -29,3 +29,12 @@ Las caras del polígono tienen una separación adaptable de 18 a 36 px, con bord
 En pantallas de hasta 700 px, las tarjetas del prisma miden 340 px y muestran solo título, resumen breve y acceso al proyecto. Los asteriscos decorativos son SVG para evitar la representación como emoji en celulares. El título principal incluye «Analista de datos».
 
 La navegación permanece visible al desplazarse. En móvil incluye un acceso permanente «Hablemos», menú compacto y botones de contacto de ancho completo. Las flechas y los controles usan SVG para mantener el mismo aspecto en todos los dispositivos. Los textos de portada, proyectos, perfil y contacto se reescribieron con un enfoque directo en software, datos y automatización.
+
+## Demostraciones visuales
+
+Se agregaron dos tarjetas autorizadas por el usuario como demostraciones, sin atribuirles datos reales, clientes o integraciones activas:
+
+- `assets/dashboard-demo.svg`: diseño vectorial original inspirado en Power BI. Datos ficticios consistentes: 128.400 USD, 642 pedidos y ticket medio de 200 USD. Gráficos mensuales, categorías y regiones.
+- `assets/automation-demo.jpg`: ilustración creada con la herramienta integrada ImageGen y optimizada a JPEG. Prompt final: ilustración editorial 3D horizontal, fondo azul noche, acentos verde salvia y cian, cinco módulos de vidrio y metal unidos por conexiones luminosas; entrada por email, validación, núcleo de IA, registro y confirmación; perspectiva isométrica e iluminación cinematográfica; sin texto, marcas ni personas. Es una ilustración conceptual, no una captura de un sistema real.
+
+Ambas se amplían en diálogos accesibles y cuentan con filtros propios. El giro del prisma se pausa mientras la ampliación está abierta. El bloque de contacto restaura «¿Hacemos algo que se destaque?» y la portada presenta «Desarrollo de software. Análisis de datos. Ideas que toman forma».

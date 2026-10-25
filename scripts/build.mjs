@@ -11,7 +11,8 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const path of ['index.html', 'css/portfolio.css', 'js/portfolio.js', 'js/motion.js',
   'assets/animania.png', 'assets/craft-logo.svg', 'assets/craft-mark.svg',
-  'assets/craft.jpg', 'assets/showroom.jpg', 'assets/favicon.svg']) {
+  'assets/craft.jpg', 'assets/showroom.jpg', 'assets/favicon.svg',
+  'assets/dashboard-demo.svg', 'assets/automation-demo.jpg']) {
   const destination = resolve(output, path);
   await mkdir(dirname(destination), { recursive: true });
   await cp(resolve(projectRoot, path), destination);
