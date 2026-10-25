@@ -1,4 +1,4 @@
-import { createDissolveTrail } from './cinema-particles.js';
+import { createDissolveTrail, cursorResponse } from './cinema-particles.js';
 
 const commonSource=`
 precision highp float;
@@ -8,6 +8,9 @@ uniform float uProgress;
 uniform vec2 uPointer;
 uniform float uHover;
 uniform vec4 uTouches[5];
+uniform float uImpacts[5];
+uniform vec4 uCore;
+uniform vec4 uMotion;
 vec2 gCenter;float gZoom;vec3 gCamera;
 mat2 rotate(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
 float smoothUnion(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
@@ -46,7 +49,18 @@ float damageAt(vec2 screen){
   float falloff=1.-smoothstep(radius*.22,radius,length(screen-uTouches[i].xy));
   damage=max(damage,uTouches[i].z*falloff);
  }
- return damage;
+ float coreRadius=max(uCore.z,.0001);
+ float core=(1.-smoothstep(coreRadius*.82,coreRadius*1.42,length(screen-uCore.xy)))*uCore.w;
+ return max(damage,core);
+}
+float impactAt(vec2 screen){
+ float impact=0.;
+ for(int i=0;i<5;i++){
+  float radius=max(uTouches[i].w,.0001);
+  float falloff=1.-smoothstep(radius*.2,radius,length(screen-uTouches[i].xy));
+  impact=max(impact,uImpacts[i]*falloff*uTouches[i].z);
+ }
+ return impact;
 }
 float hash(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 `;
@@ -121,6 +135,8 @@ void main(){
  float visibility=hit&&nearTime>t+.03?.10:1.;
  float energyPulse=exp(-pow((nearPoint.y-sin(uTime*.6)*1.45)*6.,2.));
  color+=vec3(.56,.94,.66)*cap*visibility*(exp(-beamRadius*22.)*.38+exp(-beamRadius*95.)*.75)*(1.+energyPulse*.9);
+ float coreGlow=exp(-pow(length(screen-uCore.xy)/max(uCore.z,.0001),2.));
+ color+=vec3(.27,.65,.49)*coreGlow*uCore.w*(.025+uMotion.x*.035);
  color+=vec3((hash(vec3(gl_FragCoord.xy,0.))-.5)*.007);
  color*=1.-.24*pow(length((gl_FragCoord.xy/uResolution-.5)*1.2),2.);
  color=pow(vec3(1.)-exp(-max(color,0.)*1.35),vec3(.88));
@@ -132,6 +148,8 @@ attribute vec4 aSeed;
 varying float vOpacity;
 varying float vWarm;
 varying float vGlint;
+varying float vImpact;
+varying vec2 vDirection;
 void main(){
  setupCamera();
  float a=aSeed.x,b=aSeed.y,phase=aSeed.z>.5?2.1:0.;
@@ -146,7 +164,9 @@ void main(){
  }
  vec3 origin=worldPoint(local);
  vec3 worldNormal=worldPoint(normal);
- float damage=damageAt(projectPoint(origin));
+ vec2 originScreen=projectPoint(origin);
+ float damage=damageAt(originScreen);
+ float impact=impactAt(originScreen);
  float interior=1.-smoothstep(-.07,-.015,rawShape(local));
  float facing=smoothstep(-.18,.45,dot(normalize(gCamera-origin),worldNormal));
  // Thousands of points are anchored on the actual ribbon surface. The same
@@ -156,27 +176,43 @@ void main(){
   cos(local.z*3.3+local.x*1.7-uTime*1.1),
   sin(local.x*3.7+local.y*1.6+uTime*.9)
  );
- vec3 flow=normal*(.12+.26*aSeed.w)+curl*.24+cross(normal,curl)*.12;
- vec3 position=worldPoint(local+flow*damage);
+ vec3 flow=normal*(.12+.26*aSeed.w)*(1.+impact*2.1)+curl*(.24+impact*.28)+cross(normal,curl)*(.12+impact*.12);
+ vec3 position=worldPoint(local+flow*damage)+vec3(uMotion.yz,.12)*impact*damage*.48;
  vec2 projected=projectPoint(position);
+ vec2 fromCore=projected-uCore.xy;
+ float coreDistance=length(fromCore);
+ float coreRadius=uCore.z*sqrt(clamp(uCore.w,0.,1.));
+ // Mirroring the inward radial trajectory reverses its radial velocity at the
+ // boundary. The persistent core keeps returning fragments outside the cursor.
+ if(coreDistance<coreRadius&&uCore.w>.01){
+  vec2 outward=coreDistance>.0001?fromCore/coreDistance:vec2(cos(aSeed.w*6.283),sin(aSeed.w*6.283));
+  float restitution=.76+impact*.20;
+  projected=uCore.xy+outward*(coreRadius+(coreRadius-coreDistance)*restitution);
+ }
  gl_Position=vec4(projected*vec2(2.*uResolution.y/uResolution.x,2.),0.,1.);
  float distanceToCamera=length(gCamera-position);
- gl_PointSize=clamp((1.1+aSeed.w*1.8)*(1.+.35*(1.-damage))*(5.5/distanceToCamera)*(uResolution.y/720.),.8,4.2);
+ gl_PointSize=clamp((1.1+aSeed.w*1.8)*(1.+.35*(1.-damage))*(1.+impact*.75)*(5.5/distanceToCamera)*(uResolution.y/720.),.8,6.2);
  vOpacity=smoothstep(.025,.18,damage)*(.32+.48*aSeed.w)*facing*(1.-interior);
  vWarm=aSeed.w;
  vGlint=.5+.5*sin(aSeed.w*53.+uTime*1.6);
+ vImpact=impact;
+ vec2 travel=projected-originScreen;
+ vDirection=length(travel)>.0001?normalize(travel):vec2(1.,0.);
  if(vOpacity<.008)gl_Position=vec4(3.,3.,0.,1.);
 }`;
 const particleFragmentSource=`
 precision mediump float;
-varying float vOpacity;varying float vWarm;varying float vGlint;
+varying float vOpacity;varying float vWarm;varying float vGlint;varying float vImpact;varying vec2 vDirection;
 void main(){
- vec2 uv=gl_PointCoord*2.-1.;float radius=dot(uv,uv);if(radius>1.)discard;
+ vec2 sprite=gl_PointCoord*2.-1.;
+ vec2 uv=vec2(dot(sprite,vDirection),dot(sprite,vec2(-vDirection.y,vDirection.x)));
+ uv.y*=1.+vImpact*.85;
+ float radius=dot(uv,uv);if(radius>1.)discard;
  float sphere=sqrt(max(0.,1.-radius));
  float edge=1.-smoothstep(.58,1.,radius);
  vec3 tint=mix(vec3(.68,.90,.75),vec3(.94,.82,.57),step(.78,vWarm));
  float spec=pow(max(0.,1.-length(uv-vec2(-.24,.26))),5.);
- vec3 color=tint*(.42+sphere*.6)+vec3(spec*(.7+vGlint*.5));
+ vec3 color=tint*(.42+sphere*.6)+vec3(spec*(.7+vGlint*.5+vImpact*.45));
  gl_FragColor=vec4(color,vOpacity*edge);
 }`;
 
@@ -185,6 +221,7 @@ export function createCinemaRenderer(canvas) {
  if(!gl)return null;
  const shaders=[],programs=[],buffers=[];
  const trail=createDissolveTrail();
+ const core=new Float32Array(4),motion=new Float32Array(4);
  let width=1,height=1;
  let heldPointer={x:0,y:0,active:0,speed:0};
  function programFor(vertex,fragment){
@@ -196,7 +233,7 @@ export function createCinemaRenderer(canvas) {
   }
   gl.linkProgram(program);
   if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
-  const uniforms=Object.fromEntries(['uResolution','uTime','uProgress','uPointer','uHover','uTouches[0]'].map(name=>[name,gl.getUniformLocation(program,name)]));
+  const uniforms=Object.fromEntries(['uResolution','uTime','uProgress','uPointer','uHover','uTouches[0]','uImpacts[0]','uCore','uMotion'].map(name=>[name,gl.getUniformLocation(program,name)]));
   return {program,uniforms};
  }
  function bufferFor(data){const buffer=gl.createBuffer();buffers.push(buffer);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);return buffer;}
@@ -216,6 +253,7 @@ export function createCinemaRenderer(canvas) {
    gl.useProgram(target.program);const u=target.uniforms;
    gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uTime,time);gl.uniform1f(u.uProgress,progress);
    gl.uniform2f(u.uPointer,pointer.x,pointer.y);gl.uniform1f(u.uHover,pointer.active||0);gl.uniform4fv(u['uTouches[0]'],touches);
+   gl.uniform1fv(u['uImpacts[0]'],trail.impacts);gl.uniform4fv(u.uCore,core);gl.uniform4fv(u.uMotion,motion);
   }
   return {
    resize(nextWidth,nextHeight){
@@ -223,16 +261,23 @@ export function createCinemaRenderer(canvas) {
     const ratio=Math.min(devicePixelRatio||1,width<700?1.1:1,1100/width);
     canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);gl.viewport(0,0,canvas.width,canvas.height);
     trail.reset();
+    heldPointer={x:0,y:0,active:0,speed:0};
    },
    draw(time,progress,pointer,moving=true){
     if(gl.isContextLost())return;
     if(moving)heldPointer={...pointer};
     const effectPointer=moving?pointer:heldPointer;
-    const touches=trail.advance(time,(effectPointer.rawX??effectPointer.x)*.5*width/height,-(effectPointer.rawY??effectPointer.y)*.5,effectPointer.rawActive??effectPointer.active??0,Math.min(130,height*.17)/height,moving);
+    const x=(effectPointer.rawX??effectPointer.x)*.5*width/height,y=-(effectPointer.rawY??effectPointer.y)*.5;
+    const speed=effectPointer.rawSpeed??effectPointer.speed??0;
+    const response=cursorResponse(speed);
+    const activity=effectPointer.rawActive??effectPointer.active??0;
+    const touches=trail.advance(time,x,y,activity,Math.min(130,height*.17)/height,moving,speed);
+    core.set([x,y,Math.min(response.corePixels,height*.105)/height,activity>.35?1:effectPointer.active||0]);
+    motion.set([Math.max(response.impact,...trail.impacts),effectPointer.velocityX||0,effectPointer.velocityY||0,0]);
     gl.disable(gl.BLEND);uniformsFor(surface,time,progress,effectPointer,touches);
     gl.bindBuffer(gl.ARRAY_BUFFER,triangle);const position=gl.getAttribLocation(surface.program,'aPosition');
     gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,3);
-    if(touches.some((value,index)=>index%4===2&&value>.005)){
+    if(core[3]>.01||touches.some((value,index)=>index%4===2&&value>.005)){
      uniformsFor(fragments,time,progress,effectPointer,touches);
      gl.bindBuffer(gl.ARRAY_BUFFER,particleBuffer);const seed=gl.getAttribLocation(fragments.program,'aSeed');
      gl.enableVertexAttribArray(seed);gl.vertexAttribPointer(seed,4,gl.FLOAT,false,0,0);

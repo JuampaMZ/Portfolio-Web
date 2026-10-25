@@ -1,5 +1,6 @@
 import { clamp01, scrollProgress, storyState } from './scroll-math.js';
 import { createCinemaRenderer } from './cinema-renderer.js';
+import { pointerImpact } from './cinema-particles.js';
 
 export function initScrollStory() {
   const section = document.querySelector('.cinema');
@@ -15,7 +16,7 @@ export function initScrollStory() {
   const preference = matchMedia('(prefers-reduced-motion: reduce)');
   const shortViewport = matchMedia('(max-height: 520px)');
   const pointer = {x:0,y:0,active:0,speed:0};
-  const targetPointer = {x:0,y:0,active:0,speed:0};
+  const targetPointer = {x:0,y:0,active:0,speed:0,velocityX:0,velocityY:0};
   let lastPointer=null;
   let renderer = createCinemaRenderer(canvas);
   let progress = 0;
@@ -41,10 +42,10 @@ export function initScrollStory() {
     pointer.x += (targetPointer.x-pointer.x)*.08;
     pointer.y += (targetPointer.y-pointer.y)*.08;
     pointer.active += (targetPointer.active-pointer.active)*.1;
-    pointer.speed += (targetPointer.speed-pointer.speed)*.15;
-    targetPointer.speed *= .9;
+    pointer.speed += (targetPointer.speed-pointer.speed)*(1-Math.exp(-elapsed/65));
+    targetPointer.speed *= Math.exp(-elapsed/180);
     if (now-lastDraw >= 32) {
-      const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:{...pointer,rawX:targetPointer.x,rawY:targetPointer.y,rawActive:targetPointer.active};
+      const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:{...pointer,rawX:targetPointer.x,rawY:targetPointer.y,rawActive:targetPointer.active,rawSpeed:targetPointer.speed,velocityX:targetPointer.velocityX,velocityY:targetPointer.velocityY};
       renderer?.draw(animationTime,progress,effectPointer,animated);
       lastDraw = now;
     }
@@ -64,11 +65,12 @@ export function initScrollStory() {
     acts.forEach((act,index)=>{
       const weight = state.textWeights[index];
       act.style.setProperty('--act-opacity',weight.toFixed(4));
-      act.style.setProperty('--act-y',`${(1-weight)*40}px`);
+      act.style.setProperty('--act-y',`${(1-weight)*65}px`);
+      act.style.setProperty('--act-blur',`${(1-weight)*7}px`);
       lines[index].forEach((line,lineIndex)=>{
         const amount=clamp01((weight-lineIndex*.08)/(1-lineIndex*.08));
-        line.style.setProperty('--line-y',`${(1-amount)*108}%`);
-        line.style.setProperty('--line-rotate',`${(1-amount)*12}deg`);
+        line.style.setProperty('--line-y',`${(1-amount)*126}%`);
+        line.style.setProperty('--line-rotate',`${(1-amount)*18}deg`);
       });
     });
     if (active!==state.chapter) {
@@ -92,13 +94,17 @@ export function initScrollStory() {
     lastDraw=-100;
     requestScroll();
   }
-  const revealTargets=[...document.querySelectorAll('.section-heading>*,.about-copy>.eyebrow,.about-copy>h2,.about-copy>p:not(.eyebrow),.about-links,.contact-heading,.contact-lead,.contact-cta,.contact-bottom')];
+  document.querySelectorAll('.section-heading h2,.about-copy>h2,.contact-heading h2').forEach(heading=>{
+    heading.setAttribute('aria-label',heading.innerText.replace(/\s+/g,' ').trim());
+    heading.innerHTML=heading.innerHTML.split(/<br\s*\/?\s*>/i).map((line,index)=>`<span class="reveal-line"><span style="--line-delay:${index*140}ms">${line}</span></span>`).join('');
+  });
+  const revealTargets=[...document.querySelectorAll('.section-heading>*,.filters,.project-browser,.github-link,.about-copy>.eyebrow,.about-copy>h2,.about-copy>p:not(.eyebrow),.about-links,.contact-heading,.contact-lead,.contact-cta,.contact-bottom')];
   const revealObserver=new IntersectionObserver(entries=>{
     entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('is-revealed');revealObserver.unobserve(entry.target);}});
-  },{threshold:.08,rootMargin:'0px 0px -25px 0px'});
+  },{threshold:.05,rootMargin:'0px 0px -20px 0px'});
   revealTargets.forEach((target,index)=>{
     target.classList.add('scroll-reveal');
-    target.style.setProperty('--reveal-delay',`${Math.min(index%4,3)*70}ms`);
+    target.style.setProperty('--reveal-delay',`${Math.min(index%4,3)*100}ms`);
     revealObserver.observe(target);
   });
   function applyPreference() {
@@ -128,9 +134,10 @@ export function initScrollStory() {
     targetPointer.y=(y/bounds.height-.5)*2;
     targetPointer.active=1;
     if(lastPointer){
-      const distance=Math.hypot(x-lastPointer.x,y-lastPointer.y);
-      const elapsed=Math.max(event.timeStamp-lastPointer.time,8);
-      targetPointer.speed=Math.min(1,distance/elapsed/1.5);
+      const dx=x-lastPointer.x,dy=y-lastPointer.y;
+      const distance=Math.hypot(dx,dy);
+      targetPointer.speed=Math.max(pointerImpact(dx,dy,event.timeStamp-lastPointer.time),targetPointer.speed*.4);
+      if(distance>.1){targetPointer.velocityX=dx/distance;targetPointer.velocityY=-dy/distance;}
     }
     lastPointer={x,y,time:event.timeStamp};
   },{passive:true});

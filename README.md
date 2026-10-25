@@ -14,9 +14,11 @@ La apertura ocupa toda la pantalla. Se recupera la forma orgánica original de d
 
 La interacción desintegra la superficie situada bajo el mouse. Los fragmentos nacen de los parámetros de las mismas cintas y se desplazan en un campo de flujo continuo. El material y sus fragmentos comparten una memoria de zonas afectadas, de modo que la superficie se abre, deja salir las partículas y se recompone al retirar el cursor. La rotura sigue la posición directa del mouse; la inclinación general conserva suavizado.
 
+La velocidad del cursor controla el alcance de la rotura, la rapidez del impacto, la dispersión, el brillo y el tamaño de los fragmentos. Una entrada rápida produce una respuesta mayor que un movimiento lento. El cursor mantiene un núcleo activo aunque se detenga: conserva abierta esa zona y refleja hacia afuera las trayectorias radiales de los fragmentos que intentan atravesarla. Al apartarlo, el núcleo se apaga gradualmente y permite la reconstrucción.
+
 - `js/cinema-renderer.js`: render WebGL en dos pasadas, superficie con desintegración local y puntos anclados a la geometría. Banco de 48.000 muestras en escritorio y 24.000 en móvil; solo se dibujan fragmentos de las zonas afectadas. La barra tiene iluminación y halo con oclusión por la superficie.
-- `js/cinema-particles.js`: memoria limitada a cinco zonas de daño, con crecimiento y recuperación gradual. No hay puntos flotantes decorativos, órbitas ni retículas del efecto anterior.
-- `js/scroll-story.js`: scroll nativo, texto por líneas y aparición de secciones con IntersectionObserver. Detiene el render fuera de vista o con la pestaña oculta. La pausa conserva la forma y el estado de los fragmentos.
+- `js/cinema-particles.js`: medición de impacto, respuesta por velocidad y memoria limitada a cinco zonas de daño, con energía retenida y recuperación gradual. No hay puntos flotantes decorativos, órbitas ni retículas del efecto anterior.
+- `js/scroll-story.js`: scroll nativo, títulos por líneas y aparición de textos, filtros, prisma y contacto con IntersectionObserver. Las entradas combinan desplazamiento de 85 px, escala y desenfoque progresivo, con una secuencia por líneas en los títulos. Detiene el render fuera de vista o con la pestaña oculta. La pausa conserva la forma y el estado de los fragmentos.
 - `js/scroll-math.js`: capítulos y transiciones sin superponer titulares.
 - `css/scroll-story.css`: composición adaptable y alternativa estática con el logo SVG.
 
@@ -29,6 +31,8 @@ Con movimiento reducido la escena es estática. Sin WebGL se presenta el logo ve
 El prisma presenta únicamente Craft Studio, Animanía y Showroom 3D. Los filtros son todos, sitios web y espacios 3D. Se retiraron la sección de tarjetas de portada «Una mirada propia. En cada proyecto.» y las demostraciones de Power BI y automatización.
 
 Con tres proyectos se repiten caras visuales para mantener vecinos visibles en el polígono; el contador representa tres proyectos únicos. Solo la cara activa recibe foco. Las caras tienen una separación adaptable de 18 a 36 px y sombras de profundidad.
+
+El prisma tiene un ancho de tarjeta del 48% con máximo de 560 px en escritorio, 52% en tablet y 68% con máximo de 360 px en móvil. La perspectiva también se amplía para dar más espacio al conjunto.
 
 El giro automático es lento. El centro del cursor lo detiene y los bordes aumentan la velocidad hasta 72 grados por segundo, en la dirección correspondiente. También hay flechas, teclado, gestos y pausa. En móvil las tarjetas miden 340 px y muestran título, resumen breve y acceso al proyecto.
 

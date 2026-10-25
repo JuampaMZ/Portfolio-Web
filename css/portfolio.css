@@ -42,3 +42,7 @@
 @media(max-width:360px){.header .studio-sign span{display:none}.header .brand-divider{margin-left:5px!important}.header-contact{padding-inline:10px}.header{gap:8px}}
 @media(prefers-reduced-motion:reduce){.menu-icon{transition:none}.contact-landing .contact-lead{animation:none}}
 .about-links{flex-wrap:wrap}@media(max-width:360px){.section-heading h2{font-size:clamp(28px,11vw,39px)}}
+/* Give the project ring more room while preserving compact mobile card height. */
+.projects{width:48%;max-width:560px}.prism-scene{perspective:2200px}
+@media(max-width:1050px) and (min-width:701px){.projects{width:52%;max-width:500px}}
+@media(max-width:700px){.projects{width:68%;max-width:360px}.prism-scene{perspective:1350px}}
