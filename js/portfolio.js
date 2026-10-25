@@ -5,13 +5,13 @@ const navigation = document.querySelector('#navigation');
 function closeMenu() {
   navigation.classList.remove('is-open');
   menuButton.setAttribute('aria-expanded', 'false');
-  menuButton.querySelector('span').textContent = '+';
+  menuButton.setAttribute('aria-label', 'Abrir navegación');
 }
 menuButton.addEventListener('click', () => {
   const open = menuButton.getAttribute('aria-expanded') !== 'true';
   navigation.classList.toggle('is-open', open);
   menuButton.setAttribute('aria-expanded', String(open));
-  menuButton.querySelector('span').textContent = open ? '−' : '+';
+  menuButton.setAttribute('aria-label', open ? 'Cerrar navegación' : 'Abrir navegación');
 });
 navigation.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
 document.addEventListener('keydown', event => {
@@ -108,7 +108,9 @@ function paintRotation() {
 }
 function updatePlayback() {
   playback.setAttribute('aria-pressed', String(userPaused));
-  playback.innerHTML = userPaused ? 'Reanudar giro <span aria-hidden="true">▶</span>' : 'Pausar giro <span aria-hidden="true">Ⅱ</span>';
+  const playIcon = '<svg class="playback-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m5 3 8 5-8 5Z" fill="currentColor"/></svg>';
+  const pauseIcon = '<svg class="playback-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5 3v10M11 3v10" stroke="currentColor" stroke-width="2"/></svg>';
+  playback.innerHTML = userPaused ? `Activar rotación ${playIcon}` : `Detener rotación ${pauseIcon}`;
   playback.disabled = visible.length < 2;
 }
 function filterProjects(category) {

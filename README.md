@@ -27,3 +27,5 @@ Publicación directa con Vercel CLI al proyecto `juan-pablo-craft-portfolio` del
 Las caras del polígono tienen una separación adaptable de 18 a 36 px, con borde y sombras de espesor. La detección del cursor cubre todo el ancho de la pantalla mientras está a la altura del carrusel, incluidos los márgenes exteriores. La velocidad máxima llega a 72 grados por segundo; el centro conserva su zona de pausa.
 
 En pantallas de hasta 700 px, las tarjetas del prisma miden 340 px y muestran solo título, resumen breve y acceso al proyecto. Los asteriscos decorativos son SVG para evitar la representación como emoji en celulares. El título principal incluye «Analista de datos».
+
+La navegación permanece visible al desplazarse. En móvil incluye un acceso permanente «Hablemos», menú compacto y botones de contacto de ancho completo. Las flechas y los controles usan SVG para mantener el mismo aspecto en todos los dispositivos. Los textos de portada, proyectos, perfil y contacto se reescribieron con un enfoque directo en software, datos y automatización.
