@@ -7,5 +7,5 @@ export function pointerImpact(dx,dy,elapsedMs) {
 
 export function cursorResponse(speed) {
   const impact=Math.pow(clamp01(speed),.72);
-  return {impact,radiusScale:1.2+impact*.8,corePixels:16+impact*10};
+  return {impact,radiusScale:1.0+impact*.55,corePixels:16+impact*6};
 }

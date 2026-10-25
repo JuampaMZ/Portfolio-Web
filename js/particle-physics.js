@@ -142,7 +142,7 @@ export function createParticleSimulation({count=22000,maxActive=1800,seed=72819}
     let activeCount=0;for(let i=0;i<count;i++)if(active[i])activeCount++;
     for(const contact of contacts) {
       if(!contact.hit||contact.strength<.5)continue;
-      const impact=clamp(contact.impact||0,0,1),reach=contact.radius*(1.2+impact*.8);
+      const impact=clamp(contact.impact||0,0,1),reach=contact.radius*(1.0+impact*.55);
       const m=pose.matrix,c=contact.center;
       const local=[m[0]*c[0]+m[3]*c[1]+m[6]*c[2],m[1]*c[0]+m[4]*c[1]+m[7]*c[2],m[2]*c[0]+m[5]*c[1]+m[8]*c[2]];
       let scar=scars.find(s=>Math.hypot(s.x-local[0],s.y-local[1],s.z-local[2])<reach*.55);

@@ -16,7 +16,7 @@ Solo el desplazamiento real del mouse sobre la superficie original genera rotura
 
 - js/particle-physics.js: muestras irregulares sobre las cintas, posición y velocidad persistentes, integración a paso fijo de 1/120 s y gravedad de cuadrado inverso suavizada. Los fragmentos reciben momento tangencial al romperse; su órbita surge de la integración, sin trayectoria circular impuesta. El núcleo esférico refleja la velocidad de los fragmentos que lo golpean. Al salir el cursor, una fase de captura los devuelve a sus anclajes móviles y se cierran los cortes.
 - js/cinema-renderer.js: superficie implícita con hasta 24 cortes locales. Los fragmentos son mallas de ocho caras planas, con rotación, iluminación metálica y profundidad. ANGLE_instanced_arrays dibuja las mallas en una llamada; sin esa extensión se expanden los mismos triángulos. EXT_frag_depth permite ocultarlos detrás de la pieza; sin esa extensión hay una alternativa por distancia a la superficie.
-- js/cinema-particles.js: impacto según velocidad del mouse y núcleo compacto de 16 a 26 píxeles CSS. La velocidad amplía la fractura y el impulso inicial.
+- js/cinema-particles.js: impacto según velocidad del mouse y núcleo compacto de 16 a 22 píxeles CSS. La velocidad amplía la fractura y el impulso inicial.
 - js/scroll-story.js: captura del cursor, scroll nativo, pausa, movimiento reducido y aparición de contenido con IntersectionObserver.
 - js/scroll-math.js: capítulos y transiciones sin titulares superpuestos.
 
