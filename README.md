@@ -16,13 +16,15 @@ El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publ
 - Franja: movimiento continuo sin cortes, con velocidad y dirección controladas por el cursor. Se detiene fuera de pantalla, con la pestaña oculta o con preferencia de movimiento reducido.
 - Contacto: botones visibles, desplazamiento suave y animación de llegada.
 
-## Recorrido por scroll
+## Apertura cinematográfica
 
-El enlace «Recorrido» abre una escena sticky en tres capítulos: software, datos y automatización. El desplazamiento nativo controla la perspectiva, el cubo de Craft Studio, las ventanas flotantes, la entrada de cada línea de texto y el indicador de avance. Al retroceder, la secuencia vuelve con el scroll. Las escenas se construyen con CSS 3D y recursos propios del portfolio; no se copian imágenes ni código de la referencia visual.
+La apertura ocupa toda la pantalla. Una escultura metálica original se renderiza en WebGL y gira lentamente; el scroll modifica su orientación y acerca la cámara. Tres presentaciones breves aparecen por líneas sobre la misma escena continua. El contenido anterior de tarjetas queda después de la apertura, y las tarjetas y el prisma conservan su comportamiento.
 
-`css/scroll-story.css` define las escenas y su composición vertical para móvil. `js/scroll-story.js` actualiza la escena con eventos pasivos y requestAnimationFrame, y revela textos del resto de la página con IntersectionObserver. `js/scroll-math.js` calcula los capítulos y evita textos superpuestos durante los cambios. No se intercepta la rueda ni los gestos de desplazamiento.
+`js/cinema-renderer.js` contiene los shaders de la escultura, su iluminación y los límites de resolución. No hay dependencias, modelos, videos ni imágenes de la referencia. El render se limita a aproximadamente 30 fps y se detiene fuera de la sección o al ocultar la pestaña. Un botón pausa el movimiento autónomo. El scroll sigue siendo nativo.
 
-Sin JavaScript, con preferencia de movimiento reducido o en ventanas de hasta 520 px de alto, los tres capítulos se muestran como contenido estático legible. Los accesos a trabajo y contacto permiten saltar el recorrido. La navegación permanece visible e incorpora una línea de progreso general.
+`css/scroll-story.css` adapta la escena a escritorio y móvil. `js/scroll-story.js` vincula el scroll con la cámara y la entrada de textos, y revela el resto del contenido con IntersectionObserver. `js/scroll-math.js` calcula las transiciones sin superponer titulares.
+
+Sin JavaScript se muestra una composición gráfica estática. Si WebGL no está disponible, se conserva esa alternativa visual junto con la entrada de textos. Con movimiento reducido o en ventanas de hasta 520 px de alto se elimina el tramo de scroll prolongado. La navegación permite ir directamente a proyectos y contacto.
 
 ## Contenidos y publicación
 

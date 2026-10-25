@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { storyState, scrollProgress } from '../js/scroll-math.js';
 
-test('story progresses through software, data and automation in both directions', () => {
+test('cinematic text progresses through three chapters in both directions', () => {
   assert.equal(storyState(0).chapter, 0);
   assert.equal(storyState(.5).chapter, 1);
   assert.equal(storyState(1).chapter, 2);
