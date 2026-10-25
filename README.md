@@ -1,52 +1,37 @@
 # Juan Pablo Muttoni — Portfolio
 
-Portfolio en español de desarrollo de software, análisis de datos, automatizaciones y dashboards interactivos. HTML, CSS y JavaScript sin dependencias de ejecución. Identidad personal en azul noche, marfil y verde salvia junto al logo de Craft Studio.
+Portfolio en español de desarrollo de software, análisis de datos y experiencias digitales, con la identidad de Craft Studio en azul noche, marfil y verde salvia. HTML, CSS y JavaScript sin dependencias de ejecución.
 
 ## Desarrollo
 
-Node.js 20 o posterior. `npm run dev` abre el servidor en http://127.0.0.1:4173. `npm run check` comprueba la sintaxis de los módulos, `npm test` verifica el movimiento del polígono y las transiciones del recorrido, y `npm run build` prepara `dist/` con los recursos públicos actuales.
+Node.js 20 o posterior. `npm run dev` inicia el servidor en http://127.0.0.1:4173. `npm run check` comprueba los seis módulos, `npm test` verifica el movimiento del prisma y las transiciones de texto, y `npm run build` prepara `dist/` con una lista explícita de recursos públicos.
 
-El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni proyectos históricos. Las fotos originales y la edición anterior permanecen en el repositorio para una posible actualización futura.
+El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni recursos de demostraciones retiradas. Los archivos históricos se conservan en el repositorio.
 
-## Interacciones
+## Apertura y efecto holográfico
 
-- Portada: tarjetas con una zona de enlace fija y un contenedor visual que hace zoom. El zoom no modifica la zona que detecta el mouse.
-- Proyectos: un polígono muestra cinco tarjetas únicas. Para filtros con dos o tres tarjetas se repiten caras visualmente, manteniendo el contador de elementos únicos. Solo la cara activa recibe foco.
-- Giro automático: lento fuera de la interacción. Al mover el mouse dentro, el centro detiene el giro; hacia los bordes aumenta gradualmente la velocidad, en el sentido correspondiente. Las flechas, el teclado y los gestos permiten avanzar. Hay botón de pausa y soporte de movimiento reducido.
-- Franja: movimiento continuo sin cortes, con velocidad y dirección controladas por el cursor. Se detiene fuera de pantalla, con la pestaña oculta o con preferencia de movimiento reducido.
-- Contacto: botones visibles, desplazamiento suave y animación de llegada.
+La apertura ocupa toda la pantalla y presenta una versión tridimensional del emblema de Craft Studio: dos semianillos enfrentados y un eje vertical, con proporciones tomadas de `assets/craft-mark.svg`. El volumen tiene biseles, acabado metálico y un eje iluminado. El scroll controla la vuelta del emblema y el avance de tres titulares, con oscilación lenta e iluminación que responde al mouse.
 
-## Apertura cinematográfica
+- `js/cinema-renderer.js`: geometría e iluminación en WebGL, sin bibliotecas o modelos externos. Resolución limitada y render de aproximadamente 30 fps.
+- `js/cinema-particles.js`: efecto holográfico de tres órbitas segmentadas, pulsos cuadrados que recorren los trazados y una pequeña retícula en perspectiva. El cursor ilumina segmentos cercanos y produce pulsos breves con un indicador abierto. Reemplaza el campo anterior de puntos flotantes y estelas.
+- `js/scroll-story.js`: scroll nativo, texto por líneas y aparición de secciones con IntersectionObserver. La animación se detiene fuera de vista o con la pestaña oculta. El botón de pausa afecta al emblema y al holograma.
+- `js/scroll-math.js`: cálculo de capítulos y transiciones sin superponer los titulares.
+- `css/scroll-story.css`: composición adaptable y alternativa estática con el logo SVG.
 
-La apertura ocupa toda la pantalla. Una escultura metálica original se renderiza en WebGL y gira lentamente; el scroll modifica su orientación y acerca la cámara. Tres presentaciones breves aparecen por líneas sobre la misma escena continua. El contenido anterior de tarjetas queda después de la apertura, y las tarjetas y el prisma conservan su comportamiento.
+Las capas decorativas no interceptan enlaces ni gestos táctiles. Con movimiento reducido se muestra una escena estática; sin WebGL se usa el logo vectorial. En ventanas de hasta 520 px de alto se elimina el tramo de scroll prolongado. La navegación permanece visible y permite saltar directamente a proyectos y contacto.
 
-`js/cinema-renderer.js` contiene los shaders de la escultura, su iluminación y los límites de resolución. No hay dependencias, modelos, videos ni imágenes de la referencia. El render se limita a aproximadamente 30 fps y se detiene fuera de la sección o al ocultar la pestaña. Un botón pausa el movimiento autónomo. El scroll sigue siendo nativo.
+## Proyectos
 
-`js/cinema-particles.js` dibuja un campo de partículas con perspectiva sobre la escena: 148 puntos en escritorio y 64 en móvil. Cerca del cursor se desplazan con inercia y un giro suave, con conexiones locales limitadas, una estela breve y un halo tenue. Los reflejos de la escultura también siguen el mouse. Se atenúa el efecto sobre el área de texto y no se capturan gestos táctiles. La pausa y el movimiento reducido afectan tanto a la escultura como a las partículas; las capas decorativas no bloquean enlaces ni navegación.
+El prisma presenta exactamente tres proyectos: Craft Studio, Animanía y Showroom 3D. Los filtros son todos, sitios web y espacios 3D. Se retiraron la sección de tarjetas de portada «Una mirada propia. En cada proyecto.», las demostraciones de Power BI y automatización, sus diálogos y sus recursos de la publicación.
 
-`css/scroll-story.css` adapta la escena a escritorio y móvil. `js/scroll-story.js` vincula el scroll con la cámara y la entrada de textos, y revela el resto del contenido con IntersectionObserver. `js/scroll-math.js` calcula las transiciones sin superponer titulares.
+Con tres proyectos se repiten caras visuales para mantener vecinos visibles en el polígono; el contador representa los tres proyectos únicos. Solo la cara activa recibe foco. Las caras tienen una separación adaptable de 18 a 36 px y sombras de profundidad.
 
-Sin JavaScript se muestra una composición gráfica estática. Si WebGL no está disponible, se conserva esa alternativa visual junto con la entrada de textos. Con movimiento reducido o en ventanas de hasta 520 px de alto se elimina el tramo de scroll prolongado. La navegación permite ir directamente a proyectos y contacto.
+El giro automático es lento. El centro del cursor lo detiene y los bordes de la pantalla aumentan gradualmente la velocidad hasta 72 grados por segundo, con dirección correspondiente. También hay flechas, teclado, gestos y control de pausa. En móvil, las tarjetas miden 340 px y muestran título, resumen breve y acceso al proyecto.
 
-## Contenidos y publicación
+Los asteriscos y las flechas usan SVG para conservar su aspecto en celulares. El contacto incluye email y LinkedIn con navegación suave y animación de llegada. El perfil conserva la presentación de desarrollo, análisis de datos, automatización e IA con Claude y ChatGPT.
 
-Editar textos y enlaces en `index.html`, estilos en `css/portfolio.css`, comportamiento en `js/portfolio.js` y cálculos de movimiento en `js/motion.js`. Los recursos de Craft Studio y Animanía pertenecen al usuario; el destino del showroom se verificó en Craft Studio.
+## Publicación
 
 Sitio: https://juan-pablo-craft-portfolio.vercel.app/
 
-Publicación directa con Vercel CLI al proyecto `juan-pablo-craft-portfolio` del equipo `juans-projects-079dba21`. Configuración en `vercel.json`: framework Other, `npm run build`, salida `dist`. No hay sincronización automática con GitHub.
-
-Las caras del polígono tienen una separación adaptable de 18 a 36 px, con borde y sombras de espesor. La detección del cursor cubre todo el ancho de la pantalla mientras está a la altura del carrusel, incluidos los márgenes exteriores. La velocidad máxima llega a 72 grados por segundo; el centro conserva su zona de pausa.
-
-En pantallas de hasta 700 px, las tarjetas del prisma miden 340 px y muestran solo título, resumen breve y acceso al proyecto. Los asteriscos decorativos son SVG para evitar la representación como emoji en celulares. «Analista de datos» se presenta en la etiqueta profesional y el perfil; el título principal se concentra en desarrollo de software.
-
-La navegación permanece visible al desplazarse. En móvil incluye un acceso permanente «Hablemos», menú compacto y botones de contacto de ancho completo. Las flechas y los controles usan SVG para mantener el mismo aspecto en todos los dispositivos. Los textos de portada, proyectos, perfil y contacto se reescribieron con un enfoque directo en software, datos y automatización.
-
-## Demostraciones visuales
-
-Se agregaron dos tarjetas autorizadas por el usuario como demostraciones, sin atribuirles datos reales, clientes o integraciones activas:
-
-- `assets/dashboard-demo.svg`: diseño vectorial original inspirado en Power BI. Datos ficticios consistentes: 128.400 USD, 642 pedidos y ticket medio de 200 USD. Gráficos mensuales, categorías y regiones.
-- `assets/automation-demo.jpg`: ilustración creada con la herramienta integrada ImageGen y optimizada a JPEG. Prompt final: ilustración editorial 3D horizontal, fondo azul noche, acentos verde salvia y cian, cinco módulos de vidrio y metal unidos por conexiones luminosas; entrada por email, validación, núcleo de IA, registro y confirmación; perspectiva isométrica e iluminación cinematográfica; sin texto, marcas ni personas. Es una ilustración conceptual, no una captura de un sistema real.
-
-Ambas se amplían en diálogos accesibles y cuentan con filtros propios. El giro del prisma se pausa mientras la ampliación está abierta. El bloque de contacto restaura «¿Hacemos algo que se destaque?» y la portada presenta «Desarrollo de software. Ideas que toman forma».
+Publicación directa con Vercel CLI al proyecto `juan-pablo-craft-portfolio` del equipo `juans-projects-079dba21`. `vercel.json` usa framework Other, `npm run build` y salida `dist`. No hay sincronización automática con GitHub.

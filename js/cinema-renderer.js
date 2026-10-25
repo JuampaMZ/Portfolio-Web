@@ -10,27 +10,31 @@ uniform float uProgress;
 uniform vec2 uPointer;
 uniform float uHover;
 mat2 rotate(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
-float smoothUnion(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
 vec3 localPoint(vec3 p){
- p.xz=rotate(uProgress*4.8+uTime*.075+uPointer.x*.22)*p.xz;
- p.xy=rotate(-.45+uProgress*1.2)*p.xy;
- p.yz=rotate(.45+sin(uTime*.09)*.14+uPointer.y*.14)*p.yz;
+ p.xz=rotate(.18+uProgress*6.283185+sin(uTime*.16)*.18+uPointer.x*.22)*p.xz;
+ p.xy=rotate(.06+sin(uTime*.11)*.035+uProgress*.08)*p.xy;
+ p.yz=rotate(.08+sin(uTime*.13)*.08+uPointer.y*.13)*p.yz;
  return p;
 }
-float ribbon(vec3 p,float phase){
- float a=atan(p.z,p.x);
- float radius=1.23+.13*sin(a*3.+phase);
- vec2 crossSection=vec2(length(p.xz)-radius,p.y-.24*sin(a*2.+phase));
- crossSection=rotate(a*1.5+phase)*crossSection;
- // Elliptical cross-section gives the surface a broad, machined highlight.
- return (length(crossSection/vec2(.22,.38))-1.)*.20;
+float extrude(float planar,float depth){
+ vec2 d=vec2(planar,depth);
+ return min(max(d.x,d.y),0.)+length(max(d,0.))-.025;
+}
+float halfRing(vec3 p,float side){
+ // Proportions taken from the two half-annuli in Craft Studio's SVG mark.
+ float ring=max(length(p.xy)-.94,.52-length(p.xy));
+ float silhouette=max(ring,p.x*side);
+ return extrude(silhouette,abs(p.z)-.17);
+}
+float spineDistance(vec3 p){
+ vec3 d=abs(p)-vec3(.023,1.39,.19);
+ return min(max(d.x,max(d.y,d.z)),0.)+length(max(d,0.))-.012;
 }
 float scene(vec3 p){
  p=localPoint(p);
- float a=ribbon(p,0.);
- vec3 q=p;q.yz=rotate(1.2+uProgress*.5)*q.yz;q.xy=rotate(.5)*q.xy;
- float b=ribbon(q,2.1);
- return smoothUnion(a,b,.12);
+ float left=halfRing(p-vec3(-.123,.45,0.),1.);
+ float right=halfRing(p-vec3(.123,-.45,0.),-1.);
+ return min(min(left,right),spineDistance(p));
 }
 vec3 normalAt(vec3 p){
  vec2 e=vec2(.002,0.);
@@ -50,10 +54,10 @@ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 void main(){
  vec2 uv=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
  float mobile=1.-step(1.,uResolution.x/uResolution.y);
- vec2 center=mix(vec2(.38,.10),vec2(0.,.23),mobile);
+ vec2 center=mix(vec2(.38,.03),vec2(0.,.17),mobile);
  uv-=center;
  float zoom=1.+.09*sin(uProgress*3.14159);
- vec3 ro=vec3(0.,.08,5.5-1.1*uProgress);
+ vec3 ro=vec3(0.,.02,mix(5.7,9.6,mobile)-.6*uProgress);
  vec3 rd=normalize(vec3(uv*1.8/zoom,-2.4));
  vec3 color=vec3(.016,.026,.035);
  float halo=exp(-length(uv*vec2(.85,1.))*2.5);
@@ -70,8 +74,10 @@ void main(){
    vec3 light=normalize(vec3(-.7,1.,1.));
    float diffuse=max(dot(n,light),0.);
    float fresnel=pow(1.-max(dot(-rd,n),0.),3.);
-   vec3 base=mix(vec3(.17,.25,.20),vec3(.43,.56,.40),.5+.5*sin(localPoint(p).y*2.));
-   color=base*(.16+diffuse*.22)+environment(reflected)*(.55+fresnel*.6);
+   vec3 local=localPoint(p);
+   float spine=1.-step(.055,abs(local.x));
+   vec3 base=mix(vec3(.52,.64,.61),vec3(.78,.83,.74),.5+.5*sin(local.y*1.7));
+   color=base*(.24+diffuse*.60)+environment(reflected)*(.60+fresnel*.6);
    color+=vec3(.57,.77,.52)*pow(max(dot(n,normalize(vec3(.9,-.2,.2))),0.),5.)*.3;
    vec2 cursorUV=vec2(uPointer.x*.5*uResolution.x/uResolution.y,-uPointer.y*.5)-center;
    vec3 cursorLight=vec3(cursorUV*3.5,3.);
@@ -79,6 +85,9 @@ void main(){
    float cursorSpecular=pow(max(dot(reflect(-cursorDirection,n),-rd),0.),32.);
    float cursorDiffuse=pow(max(dot(n,cursorDirection),0.),4.);
    color+=vec3(.73,.94,.66)*(cursorSpecular*.85+cursorDiffuse*.13)*uHover;
+   float scan=exp(-pow((local.y-sin(uTime*.36+uProgress*3.)*1.5)*35.,2.));
+   color+=vec3(.30,.83,.71)*scan*.16;
+   color+=vec3(.46,.85,.56)*spine*(.28+uHover*.14);
    color=mix(color,vec3(.03,.06,.06),1.-exp(-.014*t*t));
  }
  // Fine photographic grain and a restrained vignette keep the scene tactile.

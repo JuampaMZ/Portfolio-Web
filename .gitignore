@@ -12,3 +12,5 @@ create-dashboard.mjs
 add-demo-cards.mjs
 add-scroll-story.mjs
 rework-cinema.mjs
+simplify-portfolio.mjs
+fix-cinema-layout.mjs

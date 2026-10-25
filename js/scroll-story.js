@@ -1,6 +1,6 @@
 import { clamp01, scrollProgress, storyState } from './scroll-math.js';
 import { createCinemaRenderer } from './cinema-renderer.js';
-import { createParticleField } from './cinema-particles.js';
+import { createHologramField } from './cinema-particles.js';
 
 export function initScrollStory() {
   const section = document.querySelector('.cinema');
@@ -9,7 +9,7 @@ export function initScrollStory() {
   const header = document.querySelector('.header');
   const stage = section.querySelector('.cinema-sticky');
   const canvas = section.querySelector('.cinema-canvas');
-  const particleCanvas = section.querySelector('.cinema-particles');
+  const hologramCanvas = section.querySelector('.cinema-hologram');
   const acts = [...section.querySelectorAll('[data-story-act]')];
   const lines = acts.map(act => [...act.querySelectorAll('.cinema-line>span')]);
   const counter = section.querySelector('.cinema-count');
@@ -20,7 +20,7 @@ export function initScrollStory() {
   const targetPointer = {x:0,y:0,active:0,speed:0};
   let lastPointer=null;
   let renderer = createCinemaRenderer(canvas);
-  const particles = createParticleField(particleCanvas);
+  const hologram = createHologramField(hologramCanvas);
   let progress = 0;
   let active = -1;
   let visible = true;
@@ -49,10 +49,10 @@ export function initScrollStory() {
     if (now-lastDraw >= 32) {
       const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:pointer;
       renderer?.draw(animationTime,progress,effectPointer);
-      particles?.draw(animationTime,progress,effectPointer,animated);
+      hologram?.draw(animationTime,progress,effectPointer,animated);
       lastDraw = now;
     }
-    if (animated && (renderer||particles)) requestFrame();
+    if (animated && (renderer||hologram)) requestFrame();
   }
   function updateScroll() {
     scrollRequested = false;
@@ -93,11 +93,11 @@ export function initScrollStory() {
   function resize() {
     root.style.setProperty('--header-height',`${header.offsetHeight}px`);
     renderer?.resize(stage.clientWidth,stage.clientHeight);
-    particles?.resize(stage.clientWidth,stage.clientHeight);
+    hologram?.resize(stage.clientWidth,stage.clientHeight);
     lastDraw=-100;
     requestScroll();
   }
-  const revealTargets=[...document.querySelectorAll('.hero-copy>.eyebrow,.hero-copy>.profile-role,.presentation-title,.hero-copy>.intro,.hero-actions,.section-heading>*,.about-copy>.eyebrow,.about-copy>h2,.about-copy>p:not(.eyebrow),.about-links,.contact-heading,.contact-lead,.contact-cta,.contact-bottom')];
+  const revealTargets=[...document.querySelectorAll('.section-heading>*,.about-copy>.eyebrow,.about-copy>h2,.about-copy>p:not(.eyebrow),.about-links,.contact-heading,.contact-lead,.contact-cta,.contact-bottom')];
   const revealObserver=new IntersectionObserver(entries=>{
     entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('is-revealed');revealObserver.unobserve(entry.target);}});
   },{threshold:.08,rootMargin:'0px 0px -25px 0px'});
@@ -108,7 +108,7 @@ export function initScrollStory() {
   });
   function applyPreference() {
     root.classList.toggle('scroll-enhanced',!preference.matches&&!shortViewport.matches);
-    pauseButton.hidden=(!renderer&&!particles)||preference.matches;
+    pauseButton.hidden=(!renderer&&!hologram)||preference.matches;
     if(preference.matches||shortViewport.matches) revealTargets.forEach(target=>target.classList.add('is-revealed'));
     previousTime=0;
     resize();
@@ -146,7 +146,7 @@ export function initScrollStory() {
   stage.addEventListener('pointercancel',clearPointer);
   window.addEventListener('blur',clearPointer);
   canvas.addEventListener('webglcontextlost',event=>{
-    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=!particles;
+    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=!hologram;
   });
   canvas.addEventListener('webglcontextrestored',()=>{
     renderer=createCinemaRenderer(canvas);section.classList.toggle('has-renderer',Boolean(renderer));applyPreference();

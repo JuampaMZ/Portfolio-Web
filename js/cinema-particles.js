@@ -1,126 +1,118 @@
-const TAU = Math.PI * 2;
-const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
+const TAU=Math.PI*2;
 
-export function createParticleField(canvas) {
-  const context = canvas.getContext('2d');
-  if (!context) return null;
+// Segmented orbital paths and moving data packets, rather than floating dust.
+export function createHologramField(canvas) {
+  const context=canvas.getContext('2d');
+  if(!context)return null;
   let width=1,height=1;
-  let particles=[];
-  let trail=[];
-  let previousTime=null;
-  let randomSeed=8271;
-  function random() {
-    randomSeed=(randomSeed*16807)%2147483647;
-    return (randomSeed-1)/2147483646;
-  }
+  let ripples=[];
+  let lastPulse=-1;
+  const rings=[
+    {radius:1.87,tilt:.57,roll:.33,phase:0},
+    {radius:2.14,tilt:1.02,roll:-.72,phase:2.1},
+    {radius:1.68,tilt:.85,roll:1.25,phase:4.2}
+  ];
   return {
     resize(nextWidth,nextHeight) {
       width=nextWidth;height=nextHeight;
       const ratio=Math.min(devicePixelRatio||1,1.5);
       canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
       context.setTransform(ratio,0,0,ratio,0,0);
-      randomSeed=8271;
-      particles=Array.from({length:width<700?64:148},()=>({
-        phase:random()*TAU,radius:1.6+random()*1.4,
-        elevation:(random()-.5)*3.5,depth:random(),
-        size:.5+random()*1.25,warm:random()>.75,
-        offsetX:0,offsetY:0,vx:0,vy:0
-      }));
-      trail=[];previousTime=null;
+      ripples=[];lastPulse=-1;
     },
     draw(time,progress,pointer,moving) {
-      const dt=previousTime===null?0:clamp(time-previousTime,0,.05);
-      previousTime=time;
       context.clearRect(0,0,width,height);
       const mobile=width/height<1;
       const centerX=width*.5+(mobile?0:.38)*height;
-      const centerY=height*(mobile?.27:.4);
-      const camera=5.5-progress*1.1;
+      const centerY=height*(mobile?.33:.47);
+      const camera=(mobile?9.6:5.7)-progress*.6;
       const zoom=1+.09*Math.sin(progress*Math.PI);
-      const mouseX=(pointer.x+1)*width*.5;
-      const mouseY=(pointer.y+1)*height*.5;
       const activity=moving?pointer.active:0;
-      const influence=Math.min(190,width*.3);
-      const drift=time*.07+progress*1.7;
-      const points=[];
-      for(const particle of particles) {
-        const phase=particle.phase+drift*(.5+particle.depth*.5);
-        const worldX=Math.cos(phase)*particle.radius;
-        const worldY=particle.elevation+Math.sin(phase*1.7)*.2;
-        const z=Math.sin(phase)*particle.radius*.7;
+      const mouseX=(pointer.x+1)*width*.5,mouseY=(pointer.y+1)*height*.5;
+      const project=(x,y,z)=>{
         const scale=height*1.333*zoom/(camera-z);
-        const originX=centerX+worldX*scale;
-        const originY=centerY-worldY*scale;
-        const dx=originX+particle.offsetX-mouseX;
-        const dy=originY+particle.offsetY-mouseY;
-        const distance=Math.hypot(dx,dy);
-        const proximity=Math.max(0,1-distance/influence)*activity;
-        if(moving&&dt>0) {
-          const force=proximity*proximity*(500+pointer.speed*750);
-          const divisor=Math.max(distance,12);
-          particle.vx+=((dx/divisor-dy/divisor*.7)*force-particle.offsetX*13)*dt;
-          particle.vy+=((dy/divisor+dx/divisor*.7)*force-particle.offsetY*13)*dt;
-          const damping=Math.exp(-5*dt);
-          particle.vx*=damping;particle.vy*=damping;
-          particle.offsetX=clamp(particle.offsetX+particle.vx*dt,-90,90);
-          particle.offsetY=clamp(particle.offsetY+particle.vy*dt,-90,90);
+        return {x:centerX+x*scale,y:centerY-y*scale,z};
+      };
+      const opacityAt=(x,y)=>mobile?(y>height*.56?.15:1):(x<width*.44?.12:1);
+      const orbitPoint=(ring,angle)=>{
+        const tilt=ring.tilt+Math.sin(time*.12+ring.phase)*.06+pointer.y*activity*.08;
+        const x=Math.cos(angle)*ring.radius;
+        const y=Math.sin(angle)*ring.radius*Math.cos(tilt);
+        const z=Math.sin(angle)*ring.radius*Math.sin(tilt);
+        const roll=ring.roll+progress*.32+pointer.x*activity*.07;
+        return project(x*Math.cos(roll)-y*Math.sin(roll),x*Math.sin(roll)+y*Math.cos(roll),z);
+      };
+      context.save();context.globalCompositeOperation='screen';
+      for(const [index,ring] of rings.entries()) {
+        const count=mobile?60:96;
+        const sweep=time*(.11+index*.025)+ring.phase+progress*1.4;
+        const rgb=index===1?'110,216,213':'183,215,168';
+        for(let segment=0;segment<count;segment++) {
+          if(segment%8===7)continue;
+          const a=orbitPoint(ring,segment/count*TAU);
+          const b=orbitPoint(ring,(segment+.78)/count*TAU);
+          const midpointX=(a.x+b.x)*.5,midpointY=(a.y+b.y)*.5;
+          const near=Math.max(0,1-Math.hypot(midpointX-mouseX,midpointY-mouseY)/180)*activity;
+          const depth=a.z>0?1:.32;
+          const alpha=(.19+near*.45)*depth*opacityAt(midpointX,midpointY);
+          context.beginPath();context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);
+          context.strokeStyle=`rgba(${rgb},${alpha})`;context.lineWidth=near>.3?1.1:.65;context.stroke();
         }
-        const x=originX+particle.offsetX,y=originY+particle.offsetY;
-        if(x<-20||x>width+20||y<70||y>height-55)continue;
-        // Keep the copy calm; most light belongs around the sculpture.
-        const textMask=mobile?(y>height*.56?.22:1):(x<width*.43?.25:1);
-        const depthAlpha=.22+particle.depth*.42;
-        const alpha=Math.min(1,(depthAlpha+proximity*.65)*textMask);
-        const size=particle.size*(.65+particle.depth*.7)+proximity*1.3;
-        const rgb=particle.warm?'228,200,154':'194,224,190';
-        if(proximity>.12||particle.depth>.86) {
-          const glow=context.createRadialGradient(x,y,0,x,y,size*5);
-          glow.addColorStop(0,`rgba(${rgb},${alpha*.33})`);
-          glow.addColorStop(1,`rgba(${rgb},0)`);
-          context.fillStyle=glow;context.fillRect(x-size*5,y-size*5,size*10,size*10);
-        }
-        if(proximity>.15) {
-          context.beginPath();context.moveTo(x,y);
-          context.lineTo(x-particle.vx*.045,y-particle.vy*.045);
-          context.strokeStyle=`rgba(${rgb},${alpha*.45})`;context.lineWidth=.65;context.stroke();
-        }
-        context.beginPath();context.arc(x,y,size,0,TAU);
-        context.fillStyle=`rgba(${rgb},${alpha})`;context.fill();
-        if(proximity>.25)points.push({x,y,alpha:proximity*textMask});
-      }
-      // Only nearby particles connect, so the scene never becomes a full-screen web.
-      let connections=0;
-      for(let a=0;a<points.length&&connections<16;a++) {
-        for(let b=a+1;b<points.length&&connections<16;b++) {
-          const distance=Math.hypot(points[a].x-points[b].x,points[a].y-points[b].y);
-          if(distance>75)continue;
-          context.beginPath();context.moveTo(points[a].x,points[a].y);context.lineTo(points[b].x,points[b].y);
-          context.strokeStyle=`rgba(185,219,190,${(1-distance/75)*Math.min(points[a].alpha,points[b].alpha)*.22})`;
-          context.lineWidth=.55;context.stroke();connections++;
+        // Bright packets travel along the orbital paths with short segmented wakes.
+        for(let packet=0;packet<(mobile?3:5);packet++) {
+          const angle=sweep+packet*TAU/(mobile?3:5);
+          const point=orbitPoint(ring,angle);
+          const near=Math.max(0,1-Math.hypot(point.x-mouseX,point.y-mouseY)/180)*activity;
+          const alpha=(.42+near*.5)*(point.z>0?1:.35)*opacityAt(point.x,point.y);
+          for(let tail=1;tail<=5;tail++) {
+            const before=orbitPoint(ring,angle-tail*.025);
+            context.beginPath();context.moveTo(before.x,before.y);
+            const next=orbitPoint(ring,angle-(tail-.65)*.025);
+            context.lineTo(next.x,next.y);context.strokeStyle=`rgba(${rgb},${alpha*(1-tail/6)*.6})`;
+            context.lineWidth=1;context.stroke();
+          }
+          const size=mobile?2.5:3.5;
+          context.save();context.translate(point.x,point.y);context.rotate(Math.PI/4);
+          context.strokeStyle=`rgba(${rgb},${alpha})`;context.lineWidth=.8;
+          context.shadowColor=`rgba(${rgb},${alpha})`;context.shadowBlur=8;
+          context.strokeRect(-size*.5,-size*.5,size,size);context.restore();
         }
       }
-      if(moving) {
-        trail=trail.filter(point=>time-point.time<.48);
-        const last=trail[trail.length-1];
-        if(activity>.1&&(!last||Math.hypot(mouseX-last.x,mouseY-last.y)>3)) {
-          trail.push({x:mouseX,y:mouseY,time});
-          if(trail.length>22)trail.shift();
-        }
-      } else trail=[];
-      if(activity>.015) {
-        const halo=context.createRadialGradient(mouseX,mouseY,0,mouseX,mouseY,influence*.8);
-        halo.addColorStop(0,`rgba(180,218,177,${activity*.07})`);
-        halo.addColorStop(.4,`rgba(136,193,177,${activity*.025})`);
-        halo.addColorStop(1,'rgba(136,193,177,0)');
-        context.fillStyle=halo;context.fillRect(mouseX-influence,mouseY-influence,influence*2,influence*2);
-        for(let index=1;index<trail.length;index++) {
-          const point=trail[index],before=trail[index-1];
-          const life=1-clamp((time-point.time)/.48,0,1);
-          context.beginPath();context.moveTo(before.x,before.y);context.lineTo(point.x,point.y);
-          context.strokeStyle=`rgba(207,232,191,${life*activity*.32})`;
-          context.lineWidth=life*1.5;context.lineCap='round';context.stroke();
+      // A small perspective lattice anchors the emblem without filling the screen.
+      context.lineWidth=.5;
+      for(let line=0;line<=6;line++) {
+        const x=-1.6+line*.53;
+        const a=project(x,-1.56,-.8),b=project(x,-1.56,.8);
+        context.beginPath();context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);
+        context.strokeStyle=`rgba(110,216,213,${.10*opacityAt(a.x,a.y)})`;context.stroke();
+        const z=-.8+line*.267;
+        const c=project(-1.6,-1.56,z),d=project(1.6,-1.56,z);
+        context.beginPath();context.moveTo(c.x,c.y);context.lineTo(d.x,d.y);context.stroke();
+      }
+      if(moving&&activity>.3&&pointer.speed>.18&&time-lastPulse>.22) {
+        ripples.push({x:mouseX,y:mouseY,time});lastPulse=time;
+        if(ripples.length>3)ripples.shift();
+      }
+      ripples=moving?ripples.filter(pulse=>time-pulse.time<.65):[];
+      for(const pulse of ripples) {
+        const life=(time-pulse.time)/.65;
+        const radius=8+life*52;
+        context.beginPath();context.setLineDash([3,7]);
+        context.arc(pulse.x,pulse.y,radius,0,TAU);
+        context.strokeStyle=`rgba(119,229,218,${(1-life)*activity*.24})`;
+        context.lineWidth=.7;context.stroke();context.setLineDash([]);
+      }
+      if(activity>.02) {
+        // Four open brackets give the pointer a restrained holographic response.
+        const gap=13+pointer.speed*7;
+        context.strokeStyle=`rgba(173,234,213,${activity*.48})`;context.lineWidth=.8;
+        for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+          context.beginPath();context.moveTo(mouseX+sx*gap,mouseY+sy*(gap-5));
+          context.lineTo(mouseX+sx*gap,mouseY+sy*gap);
+          context.lineTo(mouseX+sx*(gap-5),mouseY+sy*gap);context.stroke();
         }
       }
+      context.restore();
     }
   };
 }
