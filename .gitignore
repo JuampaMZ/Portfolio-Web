@@ -4,3 +4,4 @@ node_modules/
 .env*
 responsive-preview.html
 revise.mjs
+update-prism.mjs

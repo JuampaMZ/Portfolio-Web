@@ -24,3 +24,11 @@ Navegación por teclado, enlace para saltar al contenido, foco visible, menú co
 Paleta azul noche, marfil y verde salvia. Logo Craft junto a JPM. Proyectos en carrusel de tarjetas superpuestas con botones, teclado y gestos táctiles; filtros por categoría y enlaces directos. Contenido en español e incorporación de Claude y ChatGPT al proceso de trabajo.
 
 Sitio publicado: https://juan-pablo-craft-portfolio.vercel.app/ (despliegue directo, sin sincronización Git automática).
+
+## Prisma y contacto
+Los proyectos giran automáticamente en un prisma 3D (una vuelta cada 90 segundos), con pausa al pasar el mouse, al enfocar controles y al ocultar la pestaña. Las flechas, el teclado y los gestos permiten avanzar; el botón de pausa ofrece control permanente. La preferencia de movimiento reducido desactiva el giro inicial y las transiciones. Los enlaces de las tarjetas pequeñas seleccionan el proyecto y realizan un único desplazamiento.
+
+El perfil presenta desarrollo de software, automatizaciones y dashboards interactivos. Se retiraron las referencias de ubicación y la sección «Mi forma de construir». El contacto incorpora botones visibles, desplazamiento suave y animación de llegada.
+
+### Foto
+La foto se editó con la herramienta integrada ImageGen. Prompt: conservar identidad y rasgos; enderezar el encuadre; conservar traje, camisa y corbata; eliminar a la otra persona y el fondo del evento; usar fondo azul noche e iluminación profesional suave; sin texto ni retoque artificial de piel. Resultado optimizado para web en `assets/profile-professional.jpg`. El original permanece en `img/profile.jpg`.
