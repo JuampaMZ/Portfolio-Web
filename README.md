@@ -1,34 +1,25 @@
-# Juan Pablo Muttoni — Craft Portfolio
+# Juan Pablo Muttoni — Portfolio
 
-Portfolio estático en español, con identidad visual de Craft Studio, tarjetas en perspectiva y proyectos filtrables. HTML semántico, CSS responsive y JavaScript sin dependencias de ejecución.
+Portfolio en español de desarrollo de software, análisis de datos, automatizaciones y dashboards interactivos. HTML, CSS y JavaScript sin dependencias de ejecución. Identidad personal en azul noche, marfil y verde salvia junto al logo de Craft Studio.
 
 ## Desarrollo
 
-Requiere Node.js 20 o posterior. `npm run dev` sirve el sitio en http://127.0.0.1:4173. `npm run check` valida la sintaxis JavaScript. `npm run build` genera `dist/` con los únicos recursos necesarios para publicar.
+Node.js 20 o posterior. `npm run dev` abre el servidor en http://127.0.0.1:4173. `npm run check` comprueba la sintaxis, `npm test` verifica la velocidad del cursor y la geometría del polígono, y `npm run build` prepara `dist/` con los recursos públicos actuales.
 
-## Vercel
+El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni proyectos históricos. Las fotos originales y la edición anterior permanecen en el repositorio para una posible actualización futura.
 
-Importar este repositorio, seleccionar la rama del rediseño y usar la configuración incluida en `vercel.json`: framework Other, comando `npm run build`, directorio `dist`. No requiere variables de entorno ni servicios de pago.
+## Interacciones
 
-## Contenidos
+- Portada: tarjetas con una zona de enlace fija y un contenedor visual que hace zoom. El zoom no modifica la zona que detecta el mouse.
+- Proyectos: polígono de seis caras que repite los tres proyectos para mantener visibles las caras vecinas. La repetición es visual; los filtros y el contador conservan tres proyectos únicos. Solo la cara activa recibe foco.
+- Giro automático: lento fuera de la interacción. Al mover el mouse dentro, el centro detiene el giro; hacia los bordes aumenta gradualmente la velocidad, en el sentido correspondiente. Las flechas, el teclado y los gestos permiten avanzar. Hay botón de pausa y soporte de movimiento reducido.
+- Franja: movimiento continuo sin cortes, con velocidad y dirección controladas por el cursor. Se detiene fuera de pantalla, con la pestaña oculta o con preferencia de movimiento reducido.
+- Contacto: botones visibles, desplazamiento suave y animación de llegada.
 
-Editar textos, enlaces y proyectos en `index.html`; estilos en `css/portfolio.css`; menú y filtros en `js/portfolio.js`. Los recursos de Craft Studio y Animanía se copiaron de sus sitios públicos, pertenecientes al usuario. El showroom se enlaza desde el destino publicado en Craft Studio. La imagen de perfil se conserva del portfolio original.
+## Contenidos y publicación
 
-El build excluye los archivos históricos: CV, certificados y proyectos anteriores permanecen en el repositorio, pero no se publican. Se retiraron Buscando Salud y el examen Front End de la selección visible. El perfil se enfoca en desarrollo web y Craft Studio.
+Editar textos y enlaces en `index.html`, estilos en `css/portfolio.css`, comportamiento en `js/portfolio.js` y cálculos de movimiento en `js/motion.js`. Los recursos de Craft Studio y Animanía pertenecen al usuario; el destino del showroom se verificó en Craft Studio.
 
-## Accesibilidad
+Sitio: https://juan-pablo-craft-portfolio.vercel.app/
 
-Navegación por teclado, enlace para saltar al contenido, foco visible, menú con Escape, filtros con `aria-pressed` y anuncio de resultados. La preferencia de movimiento reducido desactiva animaciones y transiciones. Los enlaces externos se abren con `noopener noreferrer`.
-
-## Actualización visual
-Paleta azul noche, marfil y verde salvia. Logo Craft junto a JPM. Proyectos en carrusel de tarjetas superpuestas con botones, teclado y gestos táctiles; filtros por categoría y enlaces directos. Contenido en español e incorporación de Claude y ChatGPT al proceso de trabajo.
-
-Sitio publicado: https://juan-pablo-craft-portfolio.vercel.app/ (despliegue directo, sin sincronización Git automática).
-
-## Prisma y contacto
-Los proyectos giran automáticamente en un prisma 3D (una vuelta cada 90 segundos), con pausa al pasar el mouse, al enfocar controles y al ocultar la pestaña. Las flechas, el teclado y los gestos permiten avanzar; el botón de pausa ofrece control permanente. La preferencia de movimiento reducido desactiva el giro inicial y las transiciones. Los enlaces de las tarjetas pequeñas seleccionan el proyecto y realizan un único desplazamiento.
-
-El perfil presenta desarrollo de software, automatizaciones y dashboards interactivos. Se retiraron las referencias de ubicación y la sección «Mi forma de construir». El contacto incorpora botones visibles, desplazamiento suave y animación de llegada.
-
-### Foto
-La foto se editó con la herramienta integrada ImageGen. Prompt: conservar identidad y rasgos; enderezar el encuadre; conservar traje, camisa y corbata; eliminar a la otra persona y el fondo del evento; usar fondo azul noche e iluminación profesional suave; sin texto ni retoque artificial de piel. Resultado optimizado para web en `assets/profile-professional.jpg`. El original permanece en `img/profile.jpg`.
+Publicación directa con Vercel CLI al proyecto `juan-pablo-craft-portfolio` del equipo `juans-projects-079dba21`. Configuración en `vercel.json`: framework Other, `npm run build`, salida `dist`. No hay sincronización automática con GitHub.

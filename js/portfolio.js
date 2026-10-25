@@ -1,3 +1,5 @@
+import { pointerRotationSpeed, prismLayout } from './motion.js';
+
 const menuButton = document.querySelector('.menu-toggle');
 const navigation = document.querySelector('#navigation');
 function closeMenu() {
@@ -24,31 +26,71 @@ const rotor = document.querySelector('.projects');
 const playback = document.querySelector('.rotation-toggle');
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 let visible = [...projects];
+let faces = [...projects];
 let selected = 0;
+let activeFace = -1;
 let angle = 0;
 let userPaused = motionPreference.matches;
-let hovered = false;
+let pointerPosition = null;
+let keyboardMode = false;
+let velocity = 4;
 let touching = false;
 let onScreen = false;
 let manualUntil = 0;
 let turnAnimation = null;
 let previousFrame = 0;
 let contactTimer;
+const ticker = document.querySelector('.ticker');
+const tickerTrack = document.querySelector('.ticker-track');
+const tickerGroup = document.querySelector('.ticker-group');
+let tickerWidth = 1;
+let tickerOffset = 0;
+let tickerPointer = null;
+let tickerVisible = false;
+let tickerVelocity = 36;
 
-function stepAngle() { return 360 / visible.length; }
+function animateTicker(elapsed) {
+  if (motionPreference.matches || document.hidden || !tickerVisible) return;
+  const desired = tickerPointer === null ? 36 : Math.abs(tickerPointer) < .12 ? 0 : tickerPointer * 120;
+  tickerVelocity += (desired - tickerVelocity) * (1 - Math.exp(-elapsed / 240));
+  tickerOffset = ((tickerOffset + elapsed * tickerVelocity / 1000) % tickerWidth + tickerWidth) % tickerWidth;
+  tickerTrack.style.transform = `translate3d(${-tickerOffset}px,0,0)`;
+}
+ticker.addEventListener('pointermove', event => {
+  if (event.pointerType !== 'mouse') return;
+  const bounds = ticker.getBoundingClientRect();
+  tickerPointer = Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1));
+});
+ticker.addEventListener('pointerleave', () => { tickerPointer = null; });
+new ResizeObserver(() => { tickerWidth = tickerGroup.offsetWidth || 1; }).observe(tickerGroup);
+new IntersectionObserver(entries => { tickerVisible = entries[0].isIntersecting; }).observe(ticker);
+
+function stepAngle() { return 360 / faces.length; }
+function rebuildFaces() {
+  rotor.querySelectorAll('.prism-copy').forEach(copy => copy.remove());
+  faces = [...visible];
+  const { faceCount } = prismLayout(visible.length, rotor.offsetWidth);
+  for (let index = visible.length; index < faceCount; index++) {
+    const copy = visible[index % visible.length].cloneNode(true);
+    copy.removeAttribute('id');
+    copy.classList.add('prism-copy');
+    copy.hidden = false;
+    rotor.append(copy);
+    faces.push(copy);
+  }
+  activeFace = -1;
+}
 function updateGeometry() {
-  const width = rotor.getBoundingClientRect().width;
-  // offsetWidth is independent of the current 3D rotation.
-  const faceWidth = rotor.offsetWidth || width;
-  const radius = visible.length > 2 ? faceWidth / (2 * Math.tan(Math.PI / visible.length)) : visible.length === 2 ? faceWidth * .13 : 0;
+  const { radius } = prismLayout(visible.length, rotor.offsetWidth);
   rotor.style.setProperty('--radius', `${radius}px`);
-  visible.forEach((project, index) => project.style.setProperty('--face-angle', `${index * stepAngle()}deg`));
+  faces.forEach((project, index) => project.style.setProperty('--face-angle', `${index * stepAngle()}deg`));
 }
 function updateSelection(announce = false) {
   const step = stepAngle();
-  selected = ((Math.round(angle / step) % visible.length) + visible.length) % visible.length;
-  projects.forEach(project => {
-    const active = project === visible[selected];
+  activeFace = ((Math.round(angle / step) % faces.length) + faces.length) % faces.length;
+  selected = activeFace % visible.length;
+  rotor.querySelectorAll('.project').forEach(project => {
+    const active = project === faces[activeFace];
     project.inert = !active;
     project.setAttribute('aria-hidden', String(!active));
     project.classList.toggle('is-active', active);
@@ -60,8 +102,8 @@ function updateSelection(announce = false) {
 }
 function paintRotation() {
   rotor.style.setProperty('--turn', `${-angle}deg`);
-  const next = ((Math.round(angle / stepAngle()) % visible.length) + visible.length) % visible.length;
-  if (selected !== next) updateSelection();
+  const next = ((Math.round(angle / stepAngle()) % faces.length) + faces.length) % faces.length;
+  if (activeFace !== next) updateSelection();
 }
 function updatePlayback() {
   playback.setAttribute('aria-pressed', String(userPaused));
@@ -74,8 +116,10 @@ function filterProjects(category) {
   projects.forEach(project => { project.hidden = !visible.includes(project); });
   selected = 0;
   angle = 0;
+  velocity = 4;
   turnAnimation = null;
-  manualUntil = performance.now() + 5000;
+  manualUntil = 0;
+  rebuildFaces();
   updateGeometry();
   updateSelection();
   paintRotation();
@@ -95,6 +139,7 @@ function moveCard(direction) {
 function frame(time) {
   const elapsed = previousFrame ? Math.min(time - previousFrame, 50) : 0;
   previousFrame = time;
+  animateTicker(elapsed);
   if (!document.hidden && onScreen) {
     if (turnAnimation) {
       const progress = Math.min((time - turnAnimation.started) / turnAnimation.duration, 1);
@@ -102,8 +147,11 @@ function frame(time) {
       angle = turnAnimation.from + (turnAnimation.to - turnAnimation.from) * eased;
       if (progress === 1) { turnAnimation = null; updateSelection(true); }
       paintRotation();
-    } else if (!userPaused && !hovered && !touching && !browser.contains(document.activeElement) && visible.length > 1 && time > manualUntil) {
-      angle += elapsed * .004; // One gentle revolution every 90 seconds.
+    } else if (!userPaused && !touching && !(keyboardMode && browser.contains(document.activeElement)) && visible.length > 1 && time > manualUntil) {
+      const desiredSpeed = pointerPosition === null ? 4 : pointerRotationSpeed(pointerPosition);
+      velocity = desiredSpeed === 0 ? 0 : velocity + (desiredSpeed - velocity) * (1 - Math.exp(-elapsed / 180));
+      angle += elapsed * velocity / 1000;
+      browser.dataset.rotationSpeed = velocity.toFixed(2);
       paintRotation();
     }
   }
@@ -118,11 +166,20 @@ playback.addEventListener('click', () => {
   // Give control back to the region so focus does not keep a resumed animation paused.
   if (!userPaused) { playback.blur(); browser.blur(); manualUntil = 0; }
 });
-browser.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') hovered = true; });
-browser.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') hovered = false; });
+browser.addEventListener('pointermove', event => {
+  if (event.pointerType !== 'mouse') return;
+  const bounds = browser.getBoundingClientRect();
+  pointerPosition = Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1));
+  keyboardMode = false;
+  // Steering takes control immediately after a manual advance has finished.
+  if (!turnAnimation) manualUntil = 0;
+});
+browser.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') pointerPosition = null; });
+document.addEventListener('keydown', () => { keyboardMode = true; });
+document.addEventListener('pointerdown', () => { keyboardMode = false; });
 browser.addEventListener('focusin', () => {
   // Readable, face-on content while navigating links with a keyboard.
-  if (!turnAnimation) { angle = Math.round(angle / stepAngle()) * stepAngle(); paintRotation(); }
+  if (keyboardMode && !turnAnimation) { angle = Math.round(angle / stepAngle()) * stepAngle(); paintRotation(); }
 });
 browser.addEventListener('keydown', event => {
   if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {

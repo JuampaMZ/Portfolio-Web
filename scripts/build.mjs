@@ -1,6 +1,19 @@
-import { mkdir, cp } from 'node:fs/promises';
-await mkdir('dist', { recursive: true });
-for (const path of ['index.html', 'css/portfolio.css', 'js/portfolio.js', 'assets', 'img/profile.jpg']) {
-  await cp(path, `dist/${path}`, { recursive: true });
+import { mkdir, cp, rm } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const output = resolve(projectRoot, 'dist');
+if (resolve(process.cwd()) !== projectRoot || dirname(output) !== projectRoot) {
+  throw new Error('El build debe ejecutarse desde la raíz del portfolio.');
+}
+// Only remove the verified build directory inside this project.
+await rm(output, { recursive: true, force: true });
+await mkdir(output, { recursive: true });
+for (const path of ['index.html', 'css/portfolio.css', 'js/portfolio.js', 'js/motion.js',
+  'assets/animania.png', 'assets/craft-logo.svg', 'assets/craft-mark.svg',
+  'assets/craft.jpg', 'assets/showroom.jpg', 'assets/favicon.svg']) {
+  const destination = resolve(output, path);
+  await mkdir(dirname(destination), { recursive: true });
+  await cp(resolve(projectRoot, path), destination);
 }
 console.log('Portfolio construido en dist/');
