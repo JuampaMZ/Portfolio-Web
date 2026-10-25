@@ -1,0 +1,54 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Verificación GPU del portfolio</title>
+<style>body{margin:20px;background:#071115;color:#e9efff;font:15px system-ui}canvas{width:960px;height:640px;max-width:100%;border:1px solid #31445f}pre{white-space:pre-wrap}button{padding:10px;margin-bottom:12px}</style>
+<h1>Verificación GPU</h1><button id="run">Ejecutar comprobaciones</button><pre id="result">Listo para comprobar.</pre><canvas width="960" height="640"></canvas>
+<script type="module">
+import {createCinemaRenderer} from '../js/cinema-renderer.js';
+const canvas=document.querySelector('canvas'),output=document.querySelector('pre');
+const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false});
+const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
+for(const kind of kinds){
+ const create=gl['create'+kind].bind(gl),destroy=gl['delete'+kind].bind(gl);
+ gl['create'+kind]=(...args)=>{const value=create(...args);resources.get(kind).add(value);return value;};
+ gl['delete'+kind]=value=>{resources.get(kind).delete(value);return destroy(value);};
+}
+let latestState=null,simulationPasses=0;
+const draw=gl.drawArrays.bind(gl);
+gl.drawArrays=(...args)=>{
+ if(gl.isEnabled(gl.RASTERIZER_DISCARD))simulationPasses++;
+ else latestState=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
+ return draw(...args);
+};
+function sample(){
+ // Test-only readback. Production never reads particle state back to JavaScript.
+ const data=new Float32Array(64*6);gl.bindBuffer(gl.ARRAY_BUFFER,latestState);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;
+}
+const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+document.querySelector('button').addEventListener('click',()=>{
+ const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
+ let renderer=null;
+ try{
+  renderer=createCinemaRenderer(canvas);assert(Boolean(renderer),'Shaders WebGL 2 compilados');renderer.resize(960,640);
+  const idle={x:0,y:0,active:0};renderer.draw(0,0,idle);const scatter=sample();
+  for(let i=1;i<=126;i++)renderer.draw(i/60,0,idle);const assembled=sample();assert(distance(scatter,assembled)>.1,'Ensamblado inicial desde posiciones dispersas');
+  let time=2.1;
+  const pointer={x:assembled[0]*2*640/960,y:-assembled[1]*2,active:1};
+  for(let i=0;i<40;i++){time+=1/60;renderer.draw(time,0,pointer);}
+  const pushed=sample();assert(distance(assembled,pushed)>.02,'Repulsión integrada en GPU');
+  for(let i=0;i<150;i++){time+=1/60;renderer.draw(time,0,idle);}
+  const returned=sample();assert(distance(assembled,returned)<.02,'Resorte amortiguado recompone la forma');
+  renderer.explode(pointer.x,pointer.y);time+=1/60;renderer.draw(time,0,idle);const blasted=sample();
+  assert(Math.hypot(blasted[3],blasted[4],blasted[5])>.3,'Clic aplica impulso radial a la velocidad');
+  for(let i=0;i<150;i++){time+=1/60;renderer.draw(time,0,idle);}
+  assert(distance(assembled,sample())<.02,'La explosión vuelve a ensamblarse');
+  const beforePause=sample(),passes=simulationPasses;renderer.draw(time,0,idle,false);
+  assert(simulationPasses===passes&&distance(beforePause,sample())===0,'Pausa sin avanzar la simulación');
+  renderer.draw(time,0,idle,false,true);assert(simulationPasses===passes&&canvas.dataset.particlePhase==='static','Movimiento reducido muestra la forma sin simulación');
+  renderer.resize(390,844);renderer.draw(0,0,idle,false,true);
+  assert(Number(canvas.dataset.particleCount)<20000&&Number(canvas.dataset.pixelRatio)<=2,'Resize recalcula forma y reduce carga móvil');
+  assert(resources.get('Buffer').size===3&&resources.get('VertexArray').size===2&&resources.get('TransformFeedback').size===2,'Resize libera geometría y buffers anteriores');
+  assert(gl.getError()===gl.NO_ERROR,'Sin errores WebGL durante interacción, pausa y resize');
+  renderer.dispose();assert([...resources.values()].every(values=>values.size===0),'Desmontaje libera buffers, programas, shaders, VAO y transform feedback');
+  output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
+ }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);renderer?.dispose();}
+});
+</script></html>

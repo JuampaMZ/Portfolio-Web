@@ -1,10 +1,12 @@
 import { clamp01, scrollProgress, storyState } from './scroll-math.js';
 import { createCinemaRenderer } from './cinema-renderer.js';
-import { pointerImpact } from './cinema-particles.js';
 
 export function initScrollStory() {
   const section = document.querySelector('.cinema');
   if (!section) return;
+  const controller=new AbortController();
+  const on=(target,event,handler,options={})=>target.addEventListener(event,handler,{...options,signal:controller.signal});
+  let destroyed=false;
   const root = document.documentElement;
   const header = document.querySelector('.header');
   const stage = section.querySelector('.cinema-sticky');
@@ -15,9 +17,8 @@ export function initScrollStory() {
   const pauseButton = section.querySelector('.cinema-pause');
   const preference = matchMedia('(prefers-reduced-motion: reduce)');
   const shortViewport = matchMedia('(max-height: 520px)');
-  const pointer = {x:0,y:0,active:0,speed:0};
-  const targetPointer = {x:0,y:0,active:0,speed:0,velocityX:0,velocityY:0};
-  let lastPointer=null;
+  const pointer = {x:0,y:0,active:0};
+  const targetPointer = {x:0,y:0,active:0};
   let renderer = createCinemaRenderer(canvas);
   let progress = 0;
   let active = -1;
@@ -27,11 +28,12 @@ export function initScrollStory() {
   let animationTime = 0;
   let raf = 0;
   let scrollRequested = false;
-  let lastDraw = -100;
+  let scrollRaf=0;
   section.classList.toggle('has-renderer',Boolean(renderer));
+  renderer?.attachDevelopmentPanel().catch(error=>console.warn('No se pudo abrir el panel de desarrollo.',error.message));
 
   function requestFrame() {
-    if (!raf && visible && !document.hidden) raf = requestAnimationFrame(draw);
+    if (!destroyed && !raf && visible && !document.hidden) raf = requestAnimationFrame(draw);
   }
   function draw(now) {
     raf = 0;
@@ -42,17 +44,12 @@ export function initScrollStory() {
     pointer.x += (targetPointer.x-pointer.x)*.08;
     pointer.y += (targetPointer.y-pointer.y)*.08;
     pointer.active += (targetPointer.active-pointer.active)*.1;
-    pointer.speed += (targetPointer.speed-pointer.speed)*(1-Math.exp(-elapsed/65));
-    targetPointer.speed *= Math.exp(-elapsed/180);
-    if (now-lastDraw >= 32) {
-      const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:{...pointer,rawX:targetPointer.x,rawY:targetPointer.y,rawActive:targetPointer.active,rawSpeed:targetPointer.speed,velocityX:targetPointer.velocityX,velocityY:targetPointer.velocityY};
-      renderer?.draw(animationTime,progress,effectPointer,animated);
-      lastDraw = now;
-    }
+    const effectPointer=preference.matches?{x:0,y:0,active:0}:{...pointer,rawX:targetPointer.x,rawY:targetPointer.y,rawActive:targetPointer.active};
+    renderer?.draw(animationTime,progress,effectPointer,animated,preference.matches);
     if (animated && renderer) requestFrame();
   }
   function updateScroll() {
-    scrollRequested = false;
+    scrollRequested = false;scrollRaf=0;
     const viewport = window.innerHeight;
     const total = root.scrollHeight-viewport;
     root.style.setProperty('--page-progress',`${total>0 ? clamp01(scrollY/total)*100 : 0}%`);
@@ -82,19 +79,19 @@ export function initScrollStory() {
       });
     }
     // User-driven scroll continues to choose the view when idle motion is paused.
-    lastDraw=-100;
     requestFrame();
   }
   function requestScroll() {
-    if (!scrollRequested) {scrollRequested=true;requestAnimationFrame(updateScroll);}
+    if (!destroyed&&!scrollRequested) {scrollRequested=true;scrollRaf=requestAnimationFrame(updateScroll);}
   }
   function resize() {
     root.style.setProperty('--header-height',`${header.offsetHeight}px`);
     renderer?.resize(stage.clientWidth,stage.clientHeight);
-    lastDraw=-100;
     requestScroll();
   }
   document.querySelectorAll('.section-heading h2,.about-copy>h2,.contact-heading h2').forEach(heading=>{
+    if(heading.dataset.revealPrepared)return;
+    heading.dataset.revealPrepared='true';
     heading.setAttribute('aria-label',heading.innerText.replace(/\s+/g,' ').trim());
     heading.innerHTML=heading.innerHTML.split(/<br\s*\/?\s*>/i).map((line,index)=>`<span class="reveal-line"><span style="--line-delay:${index*140}ms">${line}</span></span>`).join('');
   });
@@ -114,51 +111,57 @@ export function initScrollStory() {
     previousTime=0;
     resize();
   }
-  new IntersectionObserver(entries=>{
+  const visibilityObserver=new IntersectionObserver(entries=>{
     visible=entries[0].isIntersecting;
-    if(visible){previousTime=0;lastDraw=-100;requestFrame();}
+    if(visible){previousTime=0;requestFrame();}
     else if(raf){cancelAnimationFrame(raf);raf=0;}
-  }).observe(section);
-  pauseButton.addEventListener('click',()=>{
+  });
+  visibilityObserver.observe(section);
+  on(pauseButton,'click',()=>{
     paused=!paused;
     pauseButton.setAttribute('aria-pressed',String(paused));
     pauseButton.textContent=paused?'Reanudar animación':'Pausar animación';
     previousTime=0;
     requestFrame();
   });
-  stage.addEventListener('pointermove',event=>{
+  on(stage,'pointermove',event=>{
     if(event.pointerType!=='mouse'||preference.matches)return;
     const bounds=stage.getBoundingClientRect();
-    const x=event.clientX-bounds.left,y=event.clientY-bounds.top;
-    targetPointer.x=(x/bounds.width-.5)*2;
-    targetPointer.y=(y/bounds.height-.5)*2;
+    targetPointer.x=Math.max(-1,Math.min(1,(event.clientX-bounds.left)/bounds.width*2-1));
+    targetPointer.y=Math.max(-1,Math.min(1,(event.clientY-bounds.top)/bounds.height*2-1));
     targetPointer.active=1;
-    if(lastPointer){
-      const dx=x-lastPointer.x,dy=y-lastPointer.y;
-      const distance=Math.hypot(dx,dy);
-      targetPointer.speed=Math.max(pointerImpact(dx,dy,event.timeStamp-lastPointer.time),targetPointer.speed*.4);
-      if(distance>.1){targetPointer.velocityX=dx/distance;targetPointer.velocityY=-dy/distance;}
-    }
-    lastPointer={x,y,time:event.timeStamp};
   },{passive:true});
-  function clearPointer(){
-    targetPointer.active=0;targetPointer.speed=0;lastPointer=null;
+  on(stage,'click',event=>{
+    if(preference.matches||paused||event.button!==0||event.target.closest('a,button,input,label'))return;
+    const bounds=stage.getBoundingClientRect();
+    renderer?.explode((event.clientX-bounds.left)/bounds.width*2-1,(event.clientY-bounds.top)/bounds.height*2-1);
+    requestFrame();
+  });
+  function clearPointer(){targetPointer.active=0;}
+  on(stage,'pointerleave',clearPointer);
+  on(stage,'pointercancel',clearPointer);
+  on(window,'blur',clearPointer);
+  on(canvas,'webglcontextlost',event=>{
+    event.preventDefault();renderer?.dispose();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=true;
+  });
+  on(canvas,'webglcontextrestored',()=>{
+    renderer=createCinemaRenderer(canvas);section.classList.toggle('has-renderer',Boolean(renderer));renderer?.attachDevelopmentPanel();applyPreference();
+  });
+  on(document,'visibilitychange',()=>{previousTime=0;if(!document.hidden)requestFrame();});
+  on(window,'scroll',requestScroll,{passive:true});
+  on(window,'resize',resize,{passive:true});
+  const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(header);
+  on(preference,'change',applyPreference);
+  on(shortViewport,'change',applyPreference);
+  function dispose(){
+    if(destroyed)return;destroyed=true;controller.abort();
+    if(raf)cancelAnimationFrame(raf);raf=0;
+    if(scrollRaf)cancelAnimationFrame(scrollRaf);scrollRaf=0;
+    revealObserver.disconnect();visibilityObserver.disconnect();resizeObserver.disconnect();renderer?.dispose();renderer=null;
+    root.classList.remove('scroll-enhanced');section.classList.remove('has-renderer');
   }
-  stage.addEventListener('pointerleave',clearPointer);
-  stage.addEventListener('pointercancel',clearPointer);
-  window.addEventListener('blur',clearPointer);
-  canvas.addEventListener('webglcontextlost',event=>{
-    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=true;
-  });
-  canvas.addEventListener('webglcontextrestored',()=>{
-    renderer=createCinemaRenderer(canvas);section.classList.toggle('has-renderer',Boolean(renderer));applyPreference();
-  });
-  document.addEventListener('visibilitychange',()=>{previousTime=0;if(!document.hidden)requestFrame();});
-  window.addEventListener('scroll',requestScroll,{passive:true});
-  window.addEventListener('resize',resize,{passive:true});
-  new ResizeObserver(resize).observe(header);
-  preference.addEventListener('change',applyPreference);
-  shortViewport.addEventListener('change',applyPreference);
+  on(window,'pagehide',event=>{if(!event.persisted)dispose();});
   applyPreference();
   updateScroll();
+  return dispose;
 }

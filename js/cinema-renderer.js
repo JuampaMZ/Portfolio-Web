@@ -1,295 +1,264 @@
-import { cursorResponse } from './cinema-particles.js';
-import { createParticleSimulation, makeScenePose, locateCursorCore } from './particle-physics.js';
+import { IS_DEVELOPMENT } from './environment.js';
+import { rasterizeSculpture, sampleShapePixels } from './particle-shape.js';
 
-const commonSource=`
-precision highp float;
-uniform vec2 uResolution;
-uniform float uTime;
+// Parámetros artísticos y físicos. El panel se carga exclusivamente en localhost.
+export const PARTICLE_CONFIG={
+  count:40000,
+  mobileCount:14000,
+  size:1.7,
+  repulsionRadius:100,
+  repulsionForce:3.1,
+  spring:42,
+  damping:8.8,
+  breathing:.0045,
+  explosionForce:3.0,
+  assemblySeconds:2,
+  colorA:'#329dff',
+  colorB:'#a05aff',
+  brightness:.9,
+  maxDpr:2
+};
+
+export function particleBudget(width,{coarse=false,memory=8}={},config=PARTICLE_CONFIG){
+  const mobile=width<=700||coarse;
+  const requested=mobile?config.mobileCount:config.count;
+  return Math.round(Math.min(60000,Math.max(mobile?6000:20000,memory<=2?Math.min(requested,10000):requested)));
+}
+
+const sceneSource=`
+uniform vec4 uPlacement;
 uniform float uProgress;
-uniform vec2 uPointer;
-uniform float uHover;
-uniform vec4 uCuts[24];
-uniform int uCutCount;
-uniform vec4 uCore;
-uniform vec4 uMotion;
-uniform mat3 uLocal;
-uniform vec3 uCamera;
-uniform vec2 uCenter;
-uniform float uZoom;
-uniform float uHasDepth;
-vec2 gCenter;float gZoom;vec3 gCamera;
-mat2 rotate(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
-float smoothUnion(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
-void setupCamera(){gCenter=uCenter;gZoom=uZoom;gCamera=uCamera;}
-vec3 localPoint(vec3 p){return uLocal*p;}
-float ribbon(vec3 p,float phase){
- float a=atan(p.z,p.x);
- float radius=1.23+.13*sin(a*3.+phase);
- vec2 crossSection=vec2(length(p.xz)-radius,p.y-.24*sin(a*2.+phase));
- crossSection=rotate(a*1.5+phase)*crossSection;
- return (length(crossSection/vec2(.22,.38))-1.)*.20;
+uniform vec3 uPointer;
+vec3 homePosition(vec4 home){
+ vec3 p=home.xyz;float angle=uProgress*.24,c=cos(angle),s=sin(angle);
+ p.xy=mat2(c,-s,s,c)*p.xy;
+ p.x+=p.z*uPointer.x*.045;
+ p.y+=p.z*uPointer.y*.045;
+ return p*uPlacement.z+vec3(uPlacement.xy,0.);
 }
-float rawShape(vec3 p){
- float a=ribbon(p,0.);
- vec3 q=p;q.yz=rotate(1.2+uProgress*.5)*q.yz;q.xy=rotate(.5)*q.xy;
- return smoothUnion(a,ribbon(q,2.1),.12);
-}
-vec2 projectPoint(vec3 p){return (p.xy-gCamera.xy)*2.4*gZoom/(1.8*(gCamera.z-p.z))+gCenter;}
-float hash(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+float hash(float n){return fract(sin(n*127.1+311.7)*43758.5453);}
 `;
 
-const vertexSource=`attribute vec2 aPosition;void main(){gl_Position=vec4(aPosition,0.,1.);}`;
-const fragmentSource=commonSource+`
-
-float beamX(){return sin(uTime*.32)*.11;}
-float beamDistance(vec3 p){
- vec2 d=vec2(length(p.xz-vec2(beamX(),1.25))-.010,abs(p.y)-1.54);
- return min(max(d.x,d.y),0.)+length(max(d,0.));
+const simulationVertex=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPosition;
+layout(location=1) in vec3 aVelocity;
+layout(location=2) in vec4 aHome;
+uniform float uTime;
+uniform float uDt;
+uniform float uAssembly;
+uniform float uSpring;
+uniform float uDamping;
+uniform float uBreathing;
+uniform float uRadius;
+uniform float uRepulsion;
+uniform float uAspect;
+uniform vec3 uBlast;
+out vec3 nextPosition;
+out vec3 nextVelocity;
+`+sceneSource+`
+// Analytic curl of a three-component vector potential. Its divergence is zero;
+// no per-particle CPU noise or position updates are involved.
+vec3 curlNoise(vec3 p,float time){
+ vec3 a=vec3(1.7,2.3,1.1),b=vec3(-1.3,1.9,2.7),c=vec3(2.1,-1.5,1.8);
+ float ca=cos(dot(p,a)+time),cb=cos(dot(p,b)-time*.73),cc=cos(dot(p,c)+time*.61);
+ return vec3(c.y*cc-b.z*cb,a.z*ca-c.x*cc,b.x*cb-a.y*ca)*.27;
 }
-vec2 mapScene(vec3 p){
- vec3 local=localPoint(p);
- float body=rawShape(local);
- // Hard Boolean cuts in object space: no ambient deformation or screen mask.
- for(int i=0;i<24;i++){
-  if(i>=uCutCount)break;
-  if(uCuts[i].w>.001){
-   vec3 delta=local-uCuts[i].xyz;
-   float chip=length(delta)-uCuts[i].w;
-   // Stationary fracture facets, attached to the body.
-   float facet=max(abs(dot(delta,normalize(vec3(.8,.3,.6)))),abs(dot(delta,normalize(vec3(-.4,.9,.2)))))-uCuts[i].w*.86;
-   body=max(body,-max(chip,facet));
+void main(){
+ float id=float(gl_VertexID),seed=hash(id+1.);
+ vec3 home=homePosition(aHome);
+ vec3 target=home+curlNoise(aHome.xyz*5.5,uTime*.25)*uBreathing;
+ if(uTime<uAssembly){
+  vec3 scattered=vec3((hash(id+7.)-.5)*uAspect*2.8,(hash(id+19.)-.5)*2.5,(hash(id+31.)-.5)*1.5);
+  float t=clamp(uTime/max(.1,uAssembly-seed*.25),0.,1.);
+  float easing=t*t*t*(t*(t*6.-15.)+10.);
+  nextPosition=mix(scattered,home,easing);nextVelocity=vec3(0.);
+ }else{
+  vec3 position=aPosition,velocity=aVelocity;
+  vec2 away=position.xy-uPointer.xy;float distance=length(away);
+  float influence=1.-smoothstep(0.,uRadius,distance);
+  vec3 normal=normalize(vec3(away,(seed-.5)*.035)+vec3(.00001,0.,0.));
+  vec3 force=(target-position)*uSpring-velocity*uDamping;
+  force+=normal*influence*influence*uRepulsion*uPointer.z;
+  if(uBlast.z>0.){
+   vec3 radial=position-vec3(uBlast.xy,0.);
+   radial.z+=(seed-.5)*.18;
+   velocity+=normalize(radial+vec3(.00001,0.,0.))*uBlast.z*(.75+seed*.65)*exp(-length(radial)*.35);
   }
+  velocity+=force*uDt;
+  velocity*=min(1.,3.5/max(length(velocity),.0001));
+  nextPosition=position+velocity*uDt;nextVelocity=velocity;
  }
- float beam=beamDistance(p);
- return body<beam?vec2(body,0.):vec2(beam,2.);
-}
-vec3 normalAt(vec3 p){
- vec2 e=vec2(.002,0.);
- return normalize(vec3(mapScene(p+e.xyy).x-mapScene(p-e.xyy).x,mapScene(p+e.yxy).x-mapScene(p-e.yxy).x,mapScene(p+e.yyx).x-mapScene(p-e.yyx).x));
-}
-vec3 environment(vec3 d){
- vec3 color=vec3(.018,.026,.031);
- color+=vec3(.91,1.,.81)*pow(max(0.,dot(d,normalize(vec3(-.5,1.,.7)))),24.)*2.6;
- color+=vec3(.35,.59,.57)*pow(max(0.,dot(d,normalize(vec3(1.,.3,-.6)))),7.)*.8;
- color+=vec3(.91,.66,.37)*pow(max(0.,dot(d,normalize(vec3(-1.,-.15,-.8)))),34.)*1.8;
- return color;
-}
+ gl_Position=vec4(0.);
+}`;
+const simulationFragment=`#version 300 es
+precision highp float;
+out vec4 color;
+void main(){color=vec4(0.);}`;
+const renderVertex=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPosition;
+layout(location=1) in vec3 aVelocity;
+layout(location=2) in vec4 aHome;
+uniform vec2 uResolution;
+uniform float uSize;
+uniform float uDpr;
+uniform float uStatic;
+out float vShade;
+out float vTint;
+out float vSeed;
+`+sceneSource+`
 void main(){
- setupCamera();
- vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
- vec2 uv=screen-gCenter;
-
- vec3 ro=gCamera,rd=normalize(vec3(uv*1.8/gZoom,-2.4));
- vec3 color=vec3(.016,.026,.035)+vec3(.06,.13,.12)*exp(-length(uv*vec2(.85,1.))*2.5);
- float t=0.;vec2 sampleValue=vec2(0.);bool hit=false;
- for(int i=0;i<100;i++){
-  sampleValue=mapScene(ro+rd*t);
-  if(sampleValue.x<.0015){hit=true;break;}
-  t+=max(sampleValue.x*.65,.002);
-  if(t>13.)break;
- }
- if(hit){
-  vec3 p=ro+rd*t;
-  if(sampleValue.y>1.){
-   color=vec3(4.2,5.1,3.9);
-  }else{
-   vec3 n=normalAt(p),reflected=reflect(rd,n);
-   float diffuse=max(dot(n,normalize(vec3(-.7,1.,1.))),0.);
-   float fresnel=pow(1.-max(dot(-rd,n),0.),3.);
-   vec3 base=mix(vec3(.17,.25,.20),vec3(.43,.56,.40),.5+.5*sin(localPoint(p).y*2.));
-   color=base*(.16+diffuse*.22)+environment(reflected)*(.55+fresnel*.6);
-   color+=vec3(.57,.77,.52)*pow(max(dot(n,normalize(vec3(.9,-.2,.2))),0.),5.)*.3;
-   float beamLight=exp(-length(p.xz-vec2(beamX(),1.25))*2.6);
-   float energyPulse=exp(-pow((p.y-sin(uTime*.6)*1.45)*6.,2.));
-   color+=vec3(.48,.78,.46)*beamLight*(.30+energyPulse*.22);
-
-   color=mix(color,vec3(.03,.06,.06),1.-exp(-.014*t*t));
-  }
- }
- // Bloom is occluded by the surface, so the luminous spine passes through it.
- vec2 beamDelta=vec2(beamX(),1.25)-ro.xz;
- float nearTime=max(0.,dot(beamDelta,rd.xz)/dot(rd.xz,rd.xz));
- vec3 nearPoint=ro+rd*nearTime;
- float beamRadius=length(nearPoint.xz-vec2(beamX(),1.25));
- float cap=1.-smoothstep(1.40,1.72,abs(nearPoint.y));
- float visibility=hit&&nearTime>t+.03?.10:1.;
- float energyPulse=exp(-pow((nearPoint.y-sin(uTime*.6)*1.45)*6.,2.));
- color+=vec3(.56,.94,.66)*cap*visibility*(exp(-beamRadius*22.)*.38+exp(-beamRadius*95.)*.75)*(1.+energyPulse*.9);
- float coreGlow=exp(-pow(length(screen-uCore.xy)/max(uCore.z,.0001),2.));
- color+=vec3(.27,.65,.49)*coreGlow*uCore.w*.025;
- color+=vec3((hash(vec3(gl_FragCoord.xy,0.))-.5)*.007);
- color*=1.-.24*pow(length((gl_FragCoord.xy/uResolution-.5)*1.2),2.);
- color=pow(vec3(1.)-exp(-max(color,0.)*1.35),vec3(.88));
- gl_FragColor=vec4(color,1.);
- // DEPTH_WRITE
+ float seed=hash(float(gl_VertexID)+1.);
+ vec3 p=uStatic>.5?homePosition(aHome):aPosition;
+ gl_Position=vec4(p.x*2.*uResolution.y/uResolution.x,p.y*2.,0.,1.);
+ float depth=clamp(1.+p.z*1.5,.65,1.6);
+ gl_PointSize=max(1.,uSize*uDpr*(.65+seed*.85)*depth);
+ vShade=aHome.w;vTint=clamp(aHome.x+.5+seed*.22,0.,1.);vSeed=seed;
+}`;
+const renderFragment=`#version 300 es
+precision highp float;
+in float vShade;
+in float vTint;
+in float vSeed;
+uniform vec3 uColorA;
+uniform vec3 uColorB;
+uniform float uGain;
+uniform float uHalo;
+out vec4 color;
+void main(){
+ vec2 uv=gl_PointCoord*2.-1.;float radius=dot(uv,uv);if(radius>1.)discard;
+ float soft=exp(-radius*(uHalo>.5?3.5:2.4))*(1.-smoothstep(.65,1.,radius));
+ vec3 tint=mix(uColorA,uColorB,vTint);
+ tint=mix(tint,vec3(.72,.9,1.),pow(vShade,3.)*.34);
+ float energy=(.28+vShade*.9)*uGain;
+ color=vec4(tint,soft*energy);
 }`;
 
+const colorChannels=hex=>[1,3,5].map(offset=>parseInt(hex.slice(offset,offset+2),16)/255);
 
-const particleVertexSource=commonSource+`
-attribute vec3 aCorner;attribute vec3 aNormal;
-attribute vec4 aPositionState;attribute vec4 aVelocityState;attribute vec4 aRestState;
-varying vec3 vNormal;varying vec3 vView;varying float vTint;varying float vOpacity;
-mat3 shardRotation(float seed){
- float a=seed*31.4+uTime*(.35+seed*.9),b=seed*13.7+uTime*(.2+seed*.5);
- float ca=cos(a),sa=sin(a),cb=cos(b),sb=sin(b);
- return mat3(ca,sa,0.,-sa*cb,ca*cb,sb,sa*sb,-ca*sb,cb);
-}
-void main(){
- setupCamera();mat3 rotation=shardRotation(aRestState.w);
- vec3 position=aPositionState.xyz+rotation*aCorner*aVelocityState.w;
- vec2 projected=projectPoint(position);
- float depth=clamp((gCamera.z-position.z-.1)/15.9,0.,1.);
- gl_Position=vec4(projected*vec2(2.*uResolution.y/uResolution.x,2.),depth*2.-1.,1.);
- vNormal=rotation*aNormal;vView=normalize(gCamera-position);vTint=aRestState.w;vOpacity=aPositionState.w;
- if(uHasDepth<.5&&rawShape(localPoint(position))<-.035)vOpacity=0.;
- if(vOpacity<.01)gl_Position=vec4(3.,3.,0.,1.);
-}`;
-const particleFragmentSource=`
-precision mediump float;
-varying vec3 vNormal;varying vec3 vView;varying float vTint;varying float vOpacity;
-void main(){
- vec3 normal=normalize(vNormal);if(!gl_FrontFacing)normal=-normal;
- vec3 light=normalize(vec3(-.7,1.,1.));
- float diffuse=max(dot(normal,light),0.);
- float spec=pow(max(dot(reflect(-light,normal),normalize(vView)),0.),32.);
- float rim=pow(1.-abs(dot(normal,normalize(vView))),3.);
- vec3 metal=mix(vec3(.25,.42,.32),vec3(.70,.64,.43),step(.88,vTint));
- vec3 color=metal*(.5+diffuse*.9)+vec3(.72,.94,.78)*spec*.9+vec3(.25,.41,.32)*rim*.4;
- gl_FragColor=vec4(color,vOpacity);
-}`;
-
-// Eight flat-shaded faces make each fragment a solid irregular chip.
-function shardGeometry(){
- const points=[[0,1.1,0],[0,-.72,0],[1,0,0],[0,0,.68],[-.84,0,0],[0,0,-.78]],data=[];
- for(const face of [[0,2,3],[0,3,4],[0,4,5],[0,5,2],[1,3,2],[1,4,3],[1,5,4],[1,2,5]]){
-  const [a,b,c]=face.map(i=>points[i]),u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);
-  const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...n);
-  for(const point of [a,b,c])data.push(...point,...n.map(value=>value/length));
- }
- return new Float32Array(data);
-}
-
-export function createCinemaRenderer(canvas) {
- const gl=canvas.getContext('webgl',{alpha:false,antialias:false,depth:true,powerPreference:'low-power'});
+export function createCinemaRenderer(canvas){
+ const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,powerPreference:'high-performance'});
  if(!gl)return null;
- const hasDepth=Boolean(gl.getExtension('EXT_frag_depth'));
- const instancing=gl.getExtension('ANGLE_instanced_arrays');
- const shaders=[],programs=[],buffers=[];
- const core=new Float32Array(4),motion=new Float32Array(4);
- let width=1,height=1,simulation=null,previousTime=null,physicalCore=null,previousScreen=null,orbitDepth=null;
- let heldPointer={x:0,y:0,active:0,speed:0};
- function programFor(vertex,fragment){
+ const config={...PARTICLE_CONFIG},programs=[],shaders=[];
+ const stateBuffers=[],vaos=[],feedbacks=[];
+ let homeBuffer=null,count=0,width=0,height=0,dpr=1,read=0,disposed=false,gui=null;
+ let startTime=null,lastTime=null,accumulator=0,pendingBlast=null,placement=new Float32Array(4);
+ let fpsStart=null,fpsFrames=0,previousReduced=null;
+ const coarse=matchMedia('(pointer:coarse)').matches;
+ const development=IS_DEVELOPMENT&&['localhost','127.0.0.1','[::1]'].includes(location.hostname);
+ const feedbackStep=1/60;
+ function makeProgram(vertex,fragment,feedback=false){
   const program=gl.createProgram();programs.push(program);
-  for(const [type,code]of[[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]){
-   const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,code);gl.compileShader(shader);
-   if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));
-   gl.attachShader(program,shader);
+  for(const [type,source]of[[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]){
+   const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,source);gl.compileShader(shader);
+   if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));gl.attachShader(program,shader);
   }
-  gl.linkProgram(program);
-  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
-  const names=['uResolution','uTime','uProgress','uPointer','uHover','uCuts[0]','uCutCount','uCore','uMotion','uLocal','uCamera','uCenter','uZoom','uHasDepth'];
-  return {program,uniforms:Object.fromEntries(names.map(name=>[name,gl.getUniformLocation(program,name)]))};
+  if(feedback)gl.transformFeedbackVaryings(program,['nextPosition','nextVelocity'],gl.INTERLEAVED_ATTRIBS);
+  gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+  const names=['uPlacement','uProgress','uPointer','uTime','uDt','uAssembly','uSpring','uDamping','uBreathing','uRadius','uRepulsion','uAspect','uBlast','uResolution','uSize','uDpr','uStatic','uColorA','uColorB','uGain','uHalo'];
+  return {program,u:Object.fromEntries(names.map(name=>[name,gl.getUniformLocation(program,name)]))};
  }
- function bufferFor(data,usage=gl.STATIC_DRAW){const buffer=gl.createBuffer();buffers.push(buffer);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,data,usage);return buffer;}
+ function releaseGeometry(){
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);gl.bindVertexArray(null);
+  feedbacks.splice(0).forEach(value=>gl.deleteTransformFeedback(value));
+  vaos.splice(0).forEach(value=>gl.deleteVertexArray(value));
+  stateBuffers.splice(0).forEach(value=>gl.deleteBuffer(value));
+  if(homeBuffer){gl.deleteBuffer(homeBuffer);homeBuffer=null;}
+ }
+ function dispose(){
+  if(disposed)return;disposed=true;gui?.destroy();gui=null;releaseGeometry();
+  programs.splice(0).forEach(value=>gl.deleteProgram(value));shaders.splice(0).forEach(value=>gl.deleteShader(value));
+ }
  try{
-  const depthWrite=hasDepth?'gl_FragDepthEXT=hit?clamp((-rd.z*t-.1)/15.9,0.,1.):1.;':'';
-  const surfaceFragment=(hasDepth?'#extension GL_EXT_frag_depth : enable\n':'')+fragmentSource.replace('// DEPTH_WRITE',depthWrite);
-  const surface=programFor(vertexSource,surfaceFragment),fragments=programFor(particleVertexSource,particleFragmentSource);
-  const triangle=bufferFor(new Float32Array([-1,-1,3,-1,-1,3]));
-  const particleBuffer=bufferFor(2400*12*4,gl.DYNAMIC_DRAW);
-  const geometry=shardGeometry(),chipBuffer=bufferFor(geometry);
-  const expanded=new Float32Array(2400*24*18),fallbackBuffer=instancing?null:bufferFor(expanded.byteLength,gl.DYNAMIC_DRAW);
-  const cornerAttribute=gl.getAttribLocation(fragments.program,'aCorner'),normalAttribute=gl.getAttribLocation(fragments.program,'aNormal');
-  const positionAttribute=gl.getAttribLocation(surface.program,'aPosition');
-  const particleAttributes=['aPositionState','aVelocityState','aRestState'].map(name=>gl.getAttribLocation(fragments.program,name));
-  function uniformsFor(target,time,progress,pointer,pose){
-   gl.useProgram(target.program);const u=target.uniforms;
-   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uTime,time);gl.uniform1f(u.uProgress,progress);
-   gl.uniform2f(u.uPointer,pointer.x,pointer.y);gl.uniform1f(u.uHover,pointer.active||0);gl.uniform4fv(u['uCuts[0]'],simulation.cuts);gl.uniform1i(u.uCutCount,simulation.cutCount);
-   gl.uniform4fv(u.uCore,core);gl.uniform4fv(u.uMotion,motion);
-   // Row-major world rotation is the column-major inverse rotation for GLSL.
-   gl.uniformMatrix3fv(u.uLocal,false,pose.matrix);
-   gl.uniform3f(u.uCamera,0,pose.cameraY,pose.cameraZ);gl.uniform2f(u.uCenter,pose.centerX,pose.centerY);gl.uniform1f(u.uZoom,pose.zoom);gl.uniform1f(u.uHasDepth,hasDepth?1:0);
-  }
-  canvas.dataset.particleEngine='orbital-solid-chips';canvas.dataset.depthOcclusion=hasDepth?'depth-buffer':'surface-fallback';canvas.dataset.fragmentGeometry=instancing?'instanced-mesh':'expanded-mesh';
-  return {
-   resize(nextWidth,nextHeight){
-    width=nextWidth;height=nextHeight;
-    const ratio=Math.min(devicePixelRatio||1,width<700?1.1:1,1100/width);
-    canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);gl.viewport(0,0,canvas.width,canvas.height);
-    const count=width<700?9000:26000;
-    if(!simulation||simulation.count!==count)simulation=createParticleSimulation({count,maxActive:width<700?700:2000});else simulation.reset();
-    previousTime=null;physicalCore=null;previousScreen=null;orbitDepth=null;heldPointer={x:0,y:0,active:0,speed:0};
+  const simulation=makeProgram(simulationVertex,simulationFragment,true),points=makeProgram(renderVertex,renderFragment);
+  const api={
+   resize(nextWidth,nextHeight,force=false){
+    if(disposed||nextWidth<=0||nextHeight<=0)return;
+    const nextCount=particleBudget(nextWidth,{coarse,memory:navigator.deviceMemory||8},config);
+    const nextDpr=Math.min(devicePixelRatio||1,config.maxDpr,Math.sqrt(2400000/(nextWidth*nextHeight)));
+    if(!force&&width===nextWidth&&height===nextHeight&&count===nextCount&&dpr===nextDpr)return;
+    width=nextWidth;height=nextHeight;dpr=nextDpr;count=nextCount;
+    canvas.width=Math.max(1,Math.round(width*dpr));canvas.height=Math.max(1,Math.round(height*dpr));
+    gl.viewport(0,0,canvas.width,canvas.height);releaseGeometry();
+    const mobile=width<=700,aspect=width/height;
+    placement=new Float32Array([mobile?aspect*.02:aspect*.235,mobile?.18:.055,mobile?aspect*1.12:Math.min(1.03,aspect*.78),0]);
+    const image=rasterizeSculpture(Math.round(Math.min(512,Math.max(256,Math.min(width,height)*.65))));
+    const homes=sampleShapePixels(image,count);
+    homeBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,homeBuffer);gl.bufferData(gl.ARRAY_BUFFER,homes,gl.STATIC_DRAW);
+    // Allocate both state buffers once. Every subsequent position/velocity update
+    // stays on the GPU; there is no readback or per-particle JS frame loop.
+    for(let i=0;i<2;i++){
+     const buffer=gl.createBuffer();stateBuffers.push(buffer);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,count*6*4,gl.DYNAMIC_COPY);
+     const vao=gl.createVertexArray();vaos.push(vao);gl.bindVertexArray(vao);
+     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+     for(let attribute=0;attribute<2;attribute++){gl.enableVertexAttribArray(attribute);gl.vertexAttribPointer(attribute,3,gl.FLOAT,false,24,attribute*12);}
+     gl.bindBuffer(gl.ARRAY_BUFFER,homeBuffer);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,4,gl.FLOAT,false,16,0);
+     const feedback=gl.createTransformFeedback();feedbacks.push(feedback);gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,feedback);gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,buffer);
+    }
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,null);gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
+    read=0;startTime=null;lastTime=null;accumulator=0;pendingBlast=null;fpsStart=null;fpsFrames=0;
+    canvas.dataset.particleEngine='gpu-transform-feedback';canvas.dataset.particleCount=String(count);canvas.dataset.shapeSampling='offscreen-pixels';canvas.dataset.pixelRatio=dpr.toFixed(2);
    },
-   draw(time,progress,pointer,moving=true){
-    if(gl.isContextLost()||!simulation)return;
-    const dt=previousTime===null?0:Math.max(0,Math.min(.05,time-previousTime));previousTime=time;
-    if(moving)heldPointer={...pointer};const effectPointer=moving?pointer:heldPointer;
-    const pose=makeScenePose(time,progress,effectPointer,width,height);
-    const x=(effectPointer.rawX??effectPointer.x)*.5*width/height,y=-(effectPointer.rawY??effectPointer.y)*.5;
-    const speed=effectPointer.rawSpeed??effectPointer.speed??0,response=cursorResponse(speed);
-    const activity=effectPointer.rawActive??effectPointer.active??0;
-    core.set([x,y,response.corePixels/height,activity>.35?1:0]);
-    motion.set([response.impact,effectPointer.velocityX||0,effectPointer.velocityY||0,0]);
-    const contacts=[];
-    if(moving){
-     const sample=locateCursorCore(x,y,core[2],core[3],pose,physicalCore,dt);
-     const travel=previousScreen?Math.hypot(x-previousScreen.x,y-previousScreen.y):0;
-     // Only actual cursor travel fractures the body. Rotation, hovering and
-     // pre-existing craters can never release additional fragments.
-     if(core[3]>.5&&previousScreen?.active&&travel>.00015&&travel<1.8){
-      const steps=Math.min(16,Math.max(1,Math.ceil(travel/(core[2]*.7))));
-      for(let step=1;step<=steps;step++){
-       const t=step/steps,hit=locateCursorCore(previousScreen.x+(x-previousScreen.x)*t,previousScreen.y+(y-previousScreen.y)*t,core[2],1,pose);
-       if(hit.hit)contacts.push({...hit,impact:response.impact});
-      }
-     }
-     // Keep the orbital plane stable when the ray crosses a hollow in the piece.
-     if(core[3]<.5)orbitDepth=null;
-     if(orbitDepth===null&&contacts.length)orbitDepth=contacts[0].center[2];
-     const z=orbitDepth??sample.center[2];
-     const plane=(pose.cameraZ-z)*1.8/(2.4*pose.zoom);
-     const center=new Float64Array([(x-pose.centerX)*plane,pose.cameraY+(y-pose.centerY)*plane,z]);
-     const velocity=new Float64Array(3);
-     if(physicalCore&&dt>0&&core[3]>.5&&physicalCore.strength>.5){
-      for(let axis=0;axis<3;axis++)velocity[axis]=(center[axis]-physicalCore.center[axis])/dt;
-      const speed=Math.hypot(...velocity);if(speed>4)for(let axis=0;axis<3;axis++)velocity[axis]*=4/speed;
-     }
-     physicalCore={center,velocity,radius:core[2]*plane,strength:core[3],hit:sample.hit};
-     previousScreen={x,y,active:core[3]>.5};
+   explode(normalizedX,normalizedY){if(!disposed)pendingBlast=[normalizedX*.5*width/height,-normalizedY*.5,config.explosionForce];},
+   draw(time,progress,pointer,moving=true,reduced=false){
+    if(disposed||gl.isContextLost()||!count)return;
+    if(startTime===null)startTime=time;
+    if(previousReduced!==null&&previousReduced!==reduced){startTime=time;accumulator=0;}
+    previousReduced=reduced;
+    const age=time-startTime,dt=lastTime===null?0:Math.max(0,Math.min(1/30,time-lastTime));lastTime=time;
+    const px=(pointer.rawX??pointer.x??0)*.5*width/height,py=-(pointer.rawY??pointer.y??0)*.5,active=reduced?0:pointer.rawActive??pointer.active??0;
+    function common(target){
+     const u=target.u;gl.useProgram(target.program);gl.uniform4fv(u.uPlacement,placement);gl.uniform1f(u.uProgress,progress);gl.uniform3f(u.uPointer,px,py,active);
     }
-    if(!physicalCore)physicalCore=locateCursorCore(x,y,core[2],core[3],pose);
-    const drawCount=simulation.update({dt,pose,core:physicalCore,contacts,pointer:effectPointer,moving});
-    gl.depthMask(true);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    if(hasDepth){gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);}else gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);uniformsFor(surface,time,progress,effectPointer,pose);
-    gl.bindBuffer(gl.ARRAY_BUFFER,triangle);gl.enableVertexAttribArray(positionAttribute);gl.vertexAttribPointer(positionAttribute,2,gl.FLOAT,false,0,0);
-    [...particleAttributes,cornerAttribute,normalAttribute].forEach(attribute=>{if(instancing)instancing.vertexAttribDivisorANGLE(attribute,0);if(attribute!==positionAttribute)gl.disableVertexAttribArray(attribute);});
-    gl.drawArrays(gl.TRIANGLES,0,3);
-    if(drawCount){
-     uniformsFor(fragments,time,progress,effectPointer,pose);
-     gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.disable(gl.BLEND);
-     if(instancing){
-      gl.bindBuffer(gl.ARRAY_BUFFER,chipBuffer);
-      for(const [attribute,offset]of[[cornerAttribute,0],[normalAttribute,12]]){gl.enableVertexAttribArray(attribute);gl.vertexAttribPointer(attribute,3,gl.FLOAT,false,24,offset);instancing.vertexAttribDivisorANGLE(attribute,0);}
-      gl.bindBuffer(gl.ARRAY_BUFFER,particleBuffer);gl.bufferSubData(gl.ARRAY_BUFFER,0,simulation.renderData.subarray(0,drawCount*12));
-      particleAttributes.forEach((attribute,index)=>{gl.enableVertexAttribArray(attribute);gl.vertexAttribPointer(attribute,4,gl.FLOAT,false,48,index*16);instancing.vertexAttribDivisorANGLE(attribute,1);});
-      instancing.drawArraysInstancedANGLE(gl.TRIANGLES,0,24,drawCount);
-      particleAttributes.forEach(attribute=>instancing.vertexAttribDivisorANGLE(attribute,0));
-     }else{
-      for(let i=0;i<drawCount;i++)for(let vertex=0;vertex<24;vertex++){
-       const offset=(i*24+vertex)*18;expanded.set(geometry.subarray(vertex*6,vertex*6+6),offset);expanded.set(simulation.renderData.subarray(i*12,i*12+12),offset+6);
-      }
-      gl.bindBuffer(gl.ARRAY_BUFFER,fallbackBuffer);gl.bufferSubData(gl.ARRAY_BUFFER,0,expanded.subarray(0,drawCount*24*18));
-      for(const [attribute,size,offset]of[[cornerAttribute,3,0],[normalAttribute,3,12],...particleAttributes.map((attribute,index)=>[attribute,4,24+index*16])]){gl.enableVertexAttribArray(attribute);gl.vertexAttribPointer(attribute,size,gl.FLOAT,false,72,offset);}
-      gl.drawArrays(gl.TRIANGLES,0,drawCount*24);
+    if(!reduced&&(moving||age===0)){
+     accumulator+=dt;
+     let steps=Math.min(2,Math.floor((accumulator+1e-8)/feedbackStep));
+     if(age<config.assemblySeconds||!steps&&pendingBlast)steps=Math.max(steps,1);
+     common(simulation);const u=simulation.u;
+     gl.uniform1f(u.uTime,age);gl.uniform1f(u.uAssembly,config.assemblySeconds);gl.uniform1f(u.uSpring,config.spring);gl.uniform1f(u.uDamping,config.damping);
+     gl.uniform1f(u.uBreathing,config.breathing);gl.uniform1f(u.uRadius,config.repulsionRadius/height);gl.uniform1f(u.uRepulsion,config.repulsionForce);gl.uniform1f(u.uAspect,width/height);
+     gl.enable(gl.RASTERIZER_DISCARD);
+     for(let step=0;step<steps;step++){
+      const write=1-read;gl.uniform1f(u.uDt,feedbackStep);gl.uniform3fv(u.uBlast,pendingBlast||[0,0,0]);pendingBlast=null;
+      gl.bindVertexArray(vaos[read]);gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,feedbacks[write]);
+      gl.beginTransformFeedback(gl.POINTS);gl.drawArrays(gl.POINTS,0,count);gl.endTransformFeedback();
+      gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);read=write;
      }
+     gl.disable(gl.RASTERIZER_DISCARD);gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,null);
+     accumulator=Math.max(0,accumulator-steps*feedbackStep);
     }
-    canvas.dataset.activeFragments=String(drawCount);
+    gl.clearColor(7/255,17/255,21/255,1);gl.clear(gl.COLOR_BUFFER_BIT);
+    common(points);const u=points.u;gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uDpr,dpr);gl.uniform1f(u.uStatic,reduced?1:0);
+    gl.uniform3fv(u.uColorA,colorChannels(config.colorA));gl.uniform3fv(u.uColorB,colorChannels(config.colorB));
+    gl.bindVertexArray(vaos[read]);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.disable(gl.DEPTH_TEST);
+    const gain=config.brightness*Math.sqrt(40000/count);
+    gl.uniform1f(u.uSize,config.size*3.6);gl.uniform1f(u.uGain,gain*.055);gl.uniform1f(u.uHalo,1);gl.drawArrays(gl.POINTS,0,count);
+    gl.uniform1f(u.uSize,config.size);gl.uniform1f(u.uGain,gain);gl.uniform1f(u.uHalo,0);gl.drawArrays(gl.POINTS,0,count);
+    gl.disable(gl.BLEND);gl.bindVertexArray(null);
+    if(development&&moving){
+     if(fpsStart===null)fpsStart=performance.now();fpsFrames++;
+     const duration=performance.now()-fpsStart;
+     if(duration>1200){canvas.dataset.fps=(fpsFrames*1000/duration).toFixed(1);fpsStart=performance.now();fpsFrames=0;}
+    }
+    canvas.dataset.particlePhase=reduced?'static':age<config.assemblySeconds?'assembling':'interactive';
+   },
+   dispose,
+   async attachDevelopmentPanel(){
+    if(!development||gui||disposed)return;
+    const {default:GUI}=await import('../node_modules/lil-gui/dist/lil-gui.esm.js');
+    if(disposed)return;
+    gui=new GUI({title:'Partículas · desarrollo',width:260});
+    Object.assign(gui.domElement.style,{top:'auto',bottom:'15px',right:'15px',zIndex:'10000'});
+    gui.add(config,'count',20000,60000,1000).name('Cantidad escritorio').onFinishChange(()=>api.resize(width,height,true));
+    gui.add(config,'mobileCount',6000,20000,1000).name('Cantidad móvil').onFinishChange(()=>api.resize(width,height,true));
+    gui.add(config,'size',.7,3,.05).name('Tamaño');gui.add(config,'repulsionRadius',30,200,1).name('Radio del mouse');
+    gui.add(config,'repulsionForce',.5,8,.1).name('Repulsión');gui.add(config,'spring',15,90,1).name('Resorte');gui.add(config,'damping',5,20,.1).name('Amortiguación');
+    gui.add(config,'breathing',0,.02,.0005).name('Respiración');gui.add(config,'explosionForce',.5,4,.1).name('Explosión');
+    gui.addColor(config,'colorA').name('Azul');gui.addColor(config,'colorB').name('Violeta');gui.add(config,'brightness',.15,1,.01).name('Brillo');
+    gui.add({replay:()=>api.resize(width,height,true)},'replay').name('Repetir ensamblado');gui.close();
    }
   };
- }catch(error){
-  console.warn('La escena usa su alternativa estática.',error.message);
-  buffers.forEach(buffer=>gl.deleteBuffer(buffer));programs.forEach(program=>gl.deleteProgram(program));shaders.forEach(shader=>gl.deleteShader(shader));return null;
- }
+  return api;
+ }catch(error){dispose();console.warn('La apertura muestra su versión estática.',error.message);return null;}
 }
