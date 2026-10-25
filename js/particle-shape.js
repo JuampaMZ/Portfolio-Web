@@ -40,7 +40,6 @@ float shape(vec3 p){
 }
 void main(){
  vec2 uv=(gl_FragCoord.xy/uSize-.5)*3.8;
- if(abs(uv.x)<.009&&abs(uv.y)<1.65){gl_FragColor=vec4(1.,0.,.82,1.);return;}
  vec3 ro=vec3(0.,.08,5.5),rd=normalize(vec3(uv,-5.5));float t=0.;bool hit=false;
  for(int i=0;i<110;i++){float d=shape(ro+rd*t);if(d<.002){hit=true;break;}t+=max(d*.75,.003);if(t>9.)break;}
  if(!hit){gl_FragColor=vec4(0.);return;}

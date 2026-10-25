@@ -1,3 +1,4 @@
+import { ambientVertex, ambientFragment } from './atmosphere.js';
 import { IS_DEVELOPMENT } from './environment.js';
 import { rasterizeSculpture, sampleShapePixels } from './particle-shape.js';
 
@@ -7,15 +8,16 @@ export const PARTICLE_CONFIG={
   mobileCount:14000,
   size:1.7,
   repulsionRadius:100,
-  repulsionForce:3.1,
+  repulsionForce:4.4,
   spring:42,
   damping:8.8,
   breathing:.0045,
   explosionForce:3.0,
   assemblySeconds:2,
-  colorA:'#329dff',
-  colorB:'#a05aff',
-  brightness:.9,
+  colorA:'#385564',
+  colorB:'#52586e',
+  brightness:.85,
+  beamStrength:1.7,
   maxDpr:2
 };
 
@@ -107,6 +109,7 @@ uniform float uStatic;
 out float vShade;
 out float vTint;
 out float vSeed;
+out float vActivity;
 `+sceneSource+`
 void main(){
  float seed=hash(float(gl_VertexID)+1.);
@@ -114,6 +117,8 @@ void main(){
  gl_Position=vec4(p.x*2.*uResolution.y/uResolution.x,p.y*2.,0.,1.);
  float depth=clamp(1.+p.z*1.5,.65,1.6);
  gl_PointSize=max(1.,uSize*uDpr*(.65+seed*.85)*depth);
+ float cursor=1.-smoothstep(0.,.18,length(p.xy-uPointer.xy));
+ vActivity=clamp(length(aVelocity)*1.4+cursor*uPointer.z*.7,0.,1.);
  vShade=aHome.w;vTint=clamp(aHome.x+.5+seed*.22,0.,1.);vSeed=seed;
 }`;
 const renderFragment=`#version 300 es
@@ -121,6 +126,7 @@ precision highp float;
 in float vShade;
 in float vTint;
 in float vSeed;
+in float vActivity;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform float uGain;
@@ -130,9 +136,44 @@ void main(){
  vec2 uv=gl_PointCoord*2.-1.;float radius=dot(uv,uv);if(radius>1.)discard;
  float soft=exp(-radius*(uHalo>.5?3.5:2.4))*(1.-smoothstep(.65,1.,radius));
  vec3 tint=mix(uColorA,uColorB,vTint);
- tint=mix(tint,vec3(.72,.9,1.),pow(vShade,3.)*.34);
- float energy=(.28+vShade*.9)*uGain;
+ tint=mix(tint,vec3(.24,.49,.62),pow(vShade,3.)*.34);
+ tint=mix(tint,vec3(.38,.84,1.),vActivity*.82);
+ float energy=(.20+vShade*.88+vActivity*.65)*uGain;
  color=vec4(tint,soft*energy);
+}`;
+
+
+// The beam is an optical layer, never sampled into the particle geometry.
+const beamVertex=`#version 300 es
+void main(){
+ vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));
+ gl_Position=vec4(p*2.-1.,0.,1.);
+}`;
+const beamFragment=`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform vec4 uPlacement;
+uniform float uDpr;
+uniform float uTime;
+uniform float uBeamStrength;
+out vec4 color;
+void main(){
+ vec2 uv=(gl_FragCoord.xy-.5*uResolution)/uDpr;
+ vec2 center=uPlacement.xy*uResolution.y/uDpr;
+ vec2 p=uv-center;
+ float extent=uPlacement.z*uResolution.y/uDpr*.46;
+ float cap=1.-smoothstep(extent*.84,extent,abs(p.y));
+ float distance=abs(p.x);
+ float core=exp(-pow(distance/1.35,1.35));
+ float inner=exp(-distance/5.5)*.46;
+ float bloom=exp(-distance/28.)*.075;
+ float fog=exp(-distance/105.)*.015;
+ float pulse=exp(-pow((p.y-sin(uTime*.43)*extent*.78)/32.,2.));
+ float flare=exp(-abs(p.x)/66.)*exp(-pow(p.y/2.4,2.))*.055;
+ vec3 energy=vec3(.50,.82,1.)*(inner+bloom+fog)*(1.+pulse*.8);
+ energy+=vec3(.88,.98,1.)*core*(1.4+pulse*.4);
+ energy=(energy*cap+vec3(.40,.73,1.)*flare)*uBeamStrength;
+ color=vec4(vec3(1.)-exp(-energy),1.);
 }`;
 
 const colorChannels=hex=>[1,3,5].map(offset=>parseInt(hex.slice(offset,offset+2),16)/255);
@@ -156,7 +197,7 @@ export function createCinemaRenderer(canvas){
   }
   if(feedback)gl.transformFeedbackVaryings(program,['nextPosition','nextVelocity'],gl.INTERLEAVED_ATTRIBS);
   gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
-  const names=['uPlacement','uProgress','uPointer','uTime','uDt','uAssembly','uSpring','uDamping','uBreathing','uRadius','uRepulsion','uAspect','uBlast','uResolution','uSize','uDpr','uStatic','uColorA','uColorB','uGain','uHalo'];
+  const names=['uPlacement','uProgress','uPointer','uTime','uDt','uAssembly','uSpring','uDamping','uBreathing','uRadius','uRepulsion','uAspect','uBlast','uResolution','uSize','uDpr','uStatic','uColorA','uColorB','uGain','uHalo','uBeamStrength','uLayer','uScroll'];
   return {program,u:Object.fromEntries(names.map(name=>[name,gl.getUniformLocation(program,name)]))};
  }
  function releaseGeometry(){
@@ -171,7 +212,7 @@ export function createCinemaRenderer(canvas){
   programs.splice(0).forEach(value=>gl.deleteProgram(value));shaders.splice(0).forEach(value=>gl.deleteShader(value));
  }
  try{
-  const simulation=makeProgram(simulationVertex,simulationFragment,true),points=makeProgram(renderVertex,renderFragment);
+  const simulation=makeProgram(simulationVertex,simulationFragment,true),points=makeProgram(renderVertex,renderFragment),beam=makeProgram(beamVertex,beamFragment),ambient=makeProgram(ambientVertex,ambientFragment);
   const api={
    resize(nextWidth,nextHeight,force=false){
     if(disposed||nextWidth<=0||nextHeight<=0)return;
@@ -198,7 +239,7 @@ export function createCinemaRenderer(canvas){
     }
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,null);gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
     read=0;startTime=null;lastTime=null;accumulator=0;pendingBlast=null;fpsStart=null;fpsFrames=0;
-    canvas.dataset.particleEngine='gpu-transform-feedback';canvas.dataset.particleCount=String(count);canvas.dataset.shapeSampling='offscreen-pixels';canvas.dataset.pixelRatio=dpr.toFixed(2);
+    canvas.dataset.particleEngine='gpu-transform-feedback';canvas.dataset.particleCount=String(count);canvas.dataset.shapeSampling='offscreen-pixels';canvas.dataset.beamMaterial='continuous-light';canvas.dataset.pixelRatio=dpr.toFixed(2);
    },
    explode(normalizedX,normalizedY){if(!disposed)pendingBlast=[normalizedX*.5*width/height,-normalizedY*.5,config.explosionForce];},
    draw(time,progress,pointer,moving=true,reduced=false){
@@ -228,13 +269,20 @@ export function createCinemaRenderer(canvas){
      gl.disable(gl.RASTERIZER_DISCARD);gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,null);
      accumulator=Math.max(0,accumulator-steps*feedbackStep);
     }
-    gl.clearColor(7/255,17/255,21/255,1);gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clearColor(4/255,8/255,13/255,1);gl.clear(gl.COLOR_BUFFER_BIT);
     common(points);const u=points.u;gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uDpr,dpr);gl.uniform1f(u.uStatic,reduced?1:0);
     gl.uniform3fv(u.uColorA,colorChannels(config.colorA));gl.uniform3fv(u.uColorB,colorChannels(config.colorB));
     gl.bindVertexArray(vaos[read]);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.disable(gl.DEPTH_TEST);
+    common(ambient);gl.uniform2f(ambient.u.uResolution,canvas.width,canvas.height);gl.uniform1f(ambient.u.uDpr,dpr);
+    gl.uniform1f(ambient.u.uTime,reduced?0:age);gl.uniform1f(ambient.u.uLayer,0);gl.uniform1f(ambient.u.uScroll,0);
+    gl.drawArrays(gl.POINTS,0,reduced?16:width<700?48:100);
+    common(points);
     const gain=config.brightness*Math.sqrt(40000/count);
     gl.uniform1f(u.uSize,config.size*3.6);gl.uniform1f(u.uGain,gain*.055);gl.uniform1f(u.uHalo,1);gl.drawArrays(gl.POINTS,0,count);
     gl.uniform1f(u.uSize,config.size);gl.uniform1f(u.uGain,gain);gl.uniform1f(u.uHalo,0);gl.drawArrays(gl.POINTS,0,count);
+    common(beam);gl.uniform2f(beam.u.uResolution,canvas.width,canvas.height);gl.uniform1f(beam.u.uDpr,dpr);
+    gl.uniform1f(beam.u.uTime,reduced?0:age);gl.uniform1f(beam.u.uBeamStrength,config.beamStrength*(reduced?1:Math.min(1,age/.6)));
+    gl.drawArrays(gl.TRIANGLES,0,3);
     gl.disable(gl.BLEND);gl.bindVertexArray(null);
     if(development&&moving){
      if(fpsStart===null)fpsStart=performance.now();fpsFrames++;
@@ -255,7 +303,7 @@ export function createCinemaRenderer(canvas){
     gui.add(config,'size',.7,3,.05).name('Tamaño');gui.add(config,'repulsionRadius',30,200,1).name('Radio del mouse');
     gui.add(config,'repulsionForce',.5,8,.1).name('Repulsión');gui.add(config,'spring',15,90,1).name('Resorte');gui.add(config,'damping',5,20,.1).name('Amortiguación');
     gui.add(config,'breathing',0,.02,.0005).name('Respiración');gui.add(config,'explosionForce',.5,4,.1).name('Explosión');
-    gui.addColor(config,'colorA').name('Azul');gui.addColor(config,'colorB').name('Violeta');gui.add(config,'brightness',.15,1,.01).name('Brillo');
+    gui.addColor(config,'colorA').name('Acero');gui.addColor(config,'colorB').name('Sombra');gui.add(config,'beamStrength',.5,3,.05).name('Luz central');gui.add(config,'brightness',.15,1,.01).name('Brillo');
     gui.add({replay:()=>api.resize(width,height,true)},'replay').name('Repetir ensamblado');gui.close();
    }
   };

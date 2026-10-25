@@ -4,19 +4,20 @@ Portfolio en español de desarrollo de software, análisis de datos y experienci
 
 ## Desarrollo
 
-Node.js 20 o posterior. `npm run dev` inicia http://127.0.0.1:4173. `npm run check` comprueba siete módulos, `npm test` verifica geometría, movimiento y muestreo de las partículas, y `npm run build` prepara `dist/` con una lista explícita de recursos públicos.
+Node.js 20 o posterior. `npm run dev` inicia http://127.0.0.1:4173. `npm run check` comprueba ocho módulos, `npm test` verifica geometría, movimiento y muestreo de las partículas, y `npm run build` prepara `dist/` con una lista explícita de recursos públicos.
 
 El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni demostraciones retiradas. Los archivos históricos se conservan en el repositorio.
 
 ## Apertura de partículas en GPU
 
-La silueta de las cintas entrelazadas está formada por 40.000 partículas azules y violetas, con brillo suave y mezcla aditiva. Una imagen de la escultura se rasteriza en un canvas fuera de pantalla y sus píxeles visibles se convierten en anclajes, conservando los huecos de la forma. Este muestreo ocurre solo al iniciar o redimensionar.
+La silueta de las cintas entrelazadas está formada por 40.000 partículas en tonos de acero y azul oscuro. Al dispersarse con el mouse o el clic, los fragmentos se iluminan en cian frío. El fondo de la apertura es casi negro. Una imagen de la escultura se rasteriza en un canvas fuera de pantalla y sus píxeles visibles se convierten en anclajes, conservando los huecos de la forma. Este muestreo ocurre solo al iniciar o redimensionar. La barra central se excluye expresamente del muestreo: un shader óptico independiente dibuja su núcleo continuo, halo, pulso lento y destello horizontal. El rayo no se fragmenta ni se repele con el cursor.
 
 La simulación usa WebGL 2 Transform Feedback con dos buffers alternados de posición y velocidad. El vertex shader hace el ensamblado de dos segundos, el curl noise analítico sutil, la repulsión del cursor, la inercia, el resorte amortiguado y el impulso radial al hacer clic. No se recorren partículas ni se leen sus estados desde JavaScript durante los frames de producción. La intensidad y el tamaño dependen de la imagen y la profundidad.
 
-- js/cinema-renderer.js: PARTICLE_CONFIG al inicio del archivo expone cantidad, tamaño, radio y fuerza de repulsión, resorte, amortiguación, respiración, explosión, colores, brillo y límite de DPR. La API ofrece resize, draw, explode y dispose.
+- js/cinema-renderer.js: PARTICLE_CONFIG al inicio del archivo expone cantidad, tamaño, radio y fuerza de repulsión, resorte, amortiguación, respiración, explosión, colores, brillo, intensidad de la luz central y límite de DPR. La API ofrece resize, draw, explode y dispose.
 - js/particle-shape.js: rasterización de la escultura y muestreo reproducible de píxeles visibles.
 - js/scroll-story.js: scroll, textos animados, cursor, clic, pausa y ciclo de vida. Devuelve una función de desmontaje que aborta listeners, desconecta observadores, cancela los RAF y libera el renderer.
+- js/atmosphere.js: partículas ambientales generadas en GPU en dos canvas fijos y transparentes, detrás del contenido y por delante de los textos. No reciben eventos del puntero. La apertura también dibuja una capa lejana detrás de los títulos. Se usan 150 partículas lejanas y 44 cercanas en escritorio; 54 y 16 en móvil. La atmósfera sigue funcionando fuera de la apertura y comparte pausa y movimiento reducido. Su desmontaje elimina recursos, listeners, RAF y ambos canvas.
 - js/environment.js: modo de desarrollo explícito. El build genera false en producción. lil-gui es una dependencia de desarrollo y se importa dinámicamente solo en local y en ese modo; no se copia a dist.
 
 En móvil se usan 14.000 partículas; en móviles con poca memoria, 10.000. El DPR nunca supera 2 y también se limita la superficie de render. El objetivo es 60 fps; el rendimiento final depende del hardware. El panel local permite probar entre 20.000 y 60.000 partículas de escritorio y ajustar los parámetros sin editar el código.
@@ -35,7 +36,7 @@ El giro automático es lento; el centro del cursor lo detiene y los bordes aumen
 
 ## Validación
 
-Las 10 pruebas de Node verifican transiciones, prisma, muestreo de píxeles con huecos, reproducibilidad y reducción de carga móvil. Después de npm run dev, tests/gpu-preview.html ofrece 12 comprobaciones reales de WebGL: compilación, ensamblado, repulsión, resorte, explosión y retorno, pausa, forma estática, resize, ausencia de errores GPU y liberación de recursos. Solo esa página de prueba lee muestras del estado GPU para verificar los resultados; no se publica.
+Las 10 pruebas de Node verifican transiciones, prisma, muestreo de píxeles con huecos, reproducibilidad y reducción de carga móvil. Después de npm run dev, tests/gpu-preview.html ofrece 15 comprobaciones reales de WebGL: compilación, ensamblado, repulsión, resorte, explosión y retorno, pausa, forma estática, resize, ausencia de errores GPU, independencia del rayo respecto de la dispersión, capas ambientales y liberación de recursos. Solo esa página de prueba lee muestras del estado GPU para verificar los resultados; no se publica.
 
 La revisión visual en local comprobó la interacción y el panel, con aproximadamente 60 fps en el navegador de prueba con 40.000 y 60.000 partículas. La vista móvil de 390 px reduce la cantidad a 14.000 y no tiene desborde horizontal. Esa emulación no sustituye una medición de rendimiento sobre un teléfono físico.
 

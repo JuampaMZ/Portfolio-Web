@@ -1,3 +1,4 @@
+import { initAtmosphere } from './atmosphere.js';
 import { clamp01, scrollProgress, storyState } from './scroll-math.js';
 import { createCinemaRenderer } from './cinema-renderer.js';
 
@@ -20,6 +21,7 @@ export function initScrollStory() {
   const pointer = {x:0,y:0,active:0};
   const targetPointer = {x:0,y:0,active:0};
   let renderer = createCinemaRenderer(canvas);
+  const atmosphere=initAtmosphere();
   let progress = 0;
   let active = -1;
   let visible = true;
@@ -118,7 +120,7 @@ export function initScrollStory() {
   });
   visibilityObserver.observe(section);
   on(pauseButton,'click',()=>{
-    paused=!paused;
+    paused=!paused;atmosphere.setPaused(paused);
     pauseButton.setAttribute('aria-pressed',String(paused));
     pauseButton.textContent=paused?'Reanudar animación':'Pausar animación';
     previousTime=0;
@@ -157,7 +159,7 @@ export function initScrollStory() {
     if(destroyed)return;destroyed=true;controller.abort();
     if(raf)cancelAnimationFrame(raf);raf=0;
     if(scrollRaf)cancelAnimationFrame(scrollRaf);scrollRaf=0;
-    revealObserver.disconnect();visibilityObserver.disconnect();resizeObserver.disconnect();renderer?.dispose();renderer=null;
+    revealObserver.disconnect();visibilityObserver.disconnect();resizeObserver.disconnect();renderer?.dispose();renderer=null;atmosphere.dispose();
     root.classList.remove('scroll-enhanced');section.classList.remove('has-renderer');
   }
   on(window,'pagehide',event=>{if(!event.persisted)dispose();});

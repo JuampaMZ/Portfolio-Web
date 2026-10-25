@@ -9,7 +9,7 @@ if (resolve(process.cwd()) !== projectRoot || dirname(output) !== projectRoot) {
 // Only remove the verified build directory inside this project.
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-for (const path of ['index.html', 'css/portfolio.css', 'css/scroll-story.css', 'js/portfolio.js', 'js/motion.js', 'js/scroll-story.js', 'js/scroll-math.js', 'js/cinema-renderer.js', 'js/particle-shape.js', 'js/environment.js',
+for (const path of ['index.html', 'css/portfolio.css', 'css/scroll-story.css', 'js/portfolio.js', 'js/motion.js', 'js/scroll-story.js', 'js/scroll-math.js', 'js/cinema-renderer.js', 'js/particle-shape.js', 'js/environment.js', 'js/atmosphere.js',
   'assets/animania.png', 'assets/craft-logo.svg', 'assets/craft-mark.svg',
   'assets/craft.jpg', 'assets/showroom.jpg', 'assets/favicon.svg']) {
   const destination = resolve(output, path);
