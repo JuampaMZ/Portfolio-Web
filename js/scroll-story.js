@@ -1,5 +1,6 @@
 import { clamp01, scrollProgress, storyState } from './scroll-math.js';
 import { createCinemaRenderer } from './cinema-renderer.js';
+import { createParticleField } from './cinema-particles.js';
 
 export function initScrollStory() {
   const section = document.querySelector('.cinema');
@@ -8,15 +9,18 @@ export function initScrollStory() {
   const header = document.querySelector('.header');
   const stage = section.querySelector('.cinema-sticky');
   const canvas = section.querySelector('.cinema-canvas');
+  const particleCanvas = section.querySelector('.cinema-particles');
   const acts = [...section.querySelectorAll('[data-story-act]')];
   const lines = acts.map(act => [...act.querySelectorAll('.cinema-line>span')]);
   const counter = section.querySelector('.cinema-count');
   const pauseButton = section.querySelector('.cinema-pause');
   const preference = matchMedia('(prefers-reduced-motion: reduce)');
   const shortViewport = matchMedia('(max-height: 520px)');
-  const pointer = {x:0,y:0};
-  const targetPointer = {x:0,y:0};
+  const pointer = {x:0,y:0,active:0,speed:0};
+  const targetPointer = {x:0,y:0,active:0,speed:0};
+  let lastPointer=null;
   let renderer = createCinemaRenderer(canvas);
+  const particles = createParticleField(particleCanvas);
   let progress = 0;
   let active = -1;
   let visible = true;
@@ -39,11 +43,16 @@ export function initScrollStory() {
     if (animated) animationTime += elapsed / 1000;
     pointer.x += (targetPointer.x-pointer.x)*.08;
     pointer.y += (targetPointer.y-pointer.y)*.08;
-    if (renderer && now-lastDraw >= 32) {
-      renderer.draw(animationTime,progress,preference.matches ? {x:0,y:0} : pointer);
+    pointer.active += (targetPointer.active-pointer.active)*.1;
+    pointer.speed += (targetPointer.speed-pointer.speed)*.15;
+    targetPointer.speed *= .9;
+    if (now-lastDraw >= 32) {
+      const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:pointer;
+      renderer?.draw(animationTime,progress,effectPointer);
+      particles?.draw(animationTime,progress,effectPointer,animated);
       lastDraw = now;
     }
-    if (animated && renderer) requestFrame();
+    if (animated && (renderer||particles)) requestFrame();
   }
   function updateScroll() {
     scrollRequested = false;
@@ -84,6 +93,7 @@ export function initScrollStory() {
   function resize() {
     root.style.setProperty('--header-height',`${header.offsetHeight}px`);
     renderer?.resize(stage.clientWidth,stage.clientHeight);
+    particles?.resize(stage.clientWidth,stage.clientHeight);
     lastDraw=-100;
     requestScroll();
   }
@@ -98,7 +108,7 @@ export function initScrollStory() {
   });
   function applyPreference() {
     root.classList.toggle('scroll-enhanced',!preference.matches&&!shortViewport.matches);
-    pauseButton.hidden=!renderer||preference.matches;
+    pauseButton.hidden=(!renderer&&!particles)||preference.matches;
     if(preference.matches||shortViewport.matches) revealTargets.forEach(target=>target.classList.add('is-revealed'));
     previousTime=0;
     resize();
@@ -117,12 +127,26 @@ export function initScrollStory() {
   });
   stage.addEventListener('pointermove',event=>{
     if(event.pointerType!=='mouse'||preference.matches)return;
-    targetPointer.x=(event.clientX/window.innerWidth-.5)*2;
-    targetPointer.y=(event.clientY/window.innerHeight-.5)*2;
+    const bounds=stage.getBoundingClientRect();
+    const x=event.clientX-bounds.left,y=event.clientY-bounds.top;
+    targetPointer.x=(x/bounds.width-.5)*2;
+    targetPointer.y=(y/bounds.height-.5)*2;
+    targetPointer.active=1;
+    if(lastPointer){
+      const distance=Math.hypot(x-lastPointer.x,y-lastPointer.y);
+      const elapsed=Math.max(event.timeStamp-lastPointer.time,8);
+      targetPointer.speed=Math.min(1,distance/elapsed/1.5);
+    }
+    lastPointer={x,y,time:event.timeStamp};
   },{passive:true});
-  stage.addEventListener('pointerleave',()=>{targetPointer.x=0;targetPointer.y=0;});
+  function clearPointer(){
+    targetPointer.x=0;targetPointer.y=0;targetPointer.active=0;targetPointer.speed=0;lastPointer=null;
+  }
+  stage.addEventListener('pointerleave',clearPointer);
+  stage.addEventListener('pointercancel',clearPointer);
+  window.addEventListener('blur',clearPointer);
   canvas.addEventListener('webglcontextlost',event=>{
-    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=true;
+    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=!particles;
   });
   canvas.addEventListener('webglcontextrestored',()=>{
     renderer=createCinemaRenderer(canvas);section.classList.toggle('has-renderer',Boolean(renderer));applyPreference();

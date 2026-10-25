@@ -8,12 +8,13 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform float uProgress;
 uniform vec2 uPointer;
+uniform float uHover;
 mat2 rotate(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
 float smoothUnion(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
 vec3 localPoint(vec3 p){
- p.xz=rotate(uProgress*4.8+uTime*.075+uPointer.x*.12)*p.xz;
+ p.xz=rotate(uProgress*4.8+uTime*.075+uPointer.x*.22)*p.xz;
  p.xy=rotate(-.45+uProgress*1.2)*p.xy;
- p.yz=rotate(.45+sin(uTime*.09)*.14+uPointer.y*.07)*p.yz;
+ p.yz=rotate(.45+sin(uTime*.09)*.14+uPointer.y*.14)*p.yz;
  return p;
 }
 float ribbon(vec3 p,float phase){
@@ -72,6 +73,12 @@ void main(){
    vec3 base=mix(vec3(.17,.25,.20),vec3(.43,.56,.40),.5+.5*sin(localPoint(p).y*2.));
    color=base*(.16+diffuse*.22)+environment(reflected)*(.55+fresnel*.6);
    color+=vec3(.57,.77,.52)*pow(max(dot(n,normalize(vec3(.9,-.2,.2))),0.),5.)*.3;
+   vec2 cursorUV=vec2(uPointer.x*.5*uResolution.x/uResolution.y,-uPointer.y*.5)-center;
+   vec3 cursorLight=vec3(cursorUV*3.5,3.);
+   vec3 cursorDirection=normalize(cursorLight-p);
+   float cursorSpecular=pow(max(dot(reflect(-cursorDirection,n),-rd),0.),32.);
+   float cursorDiffuse=pow(max(dot(n,cursorDirection),0.),4.);
+   color+=vec3(.73,.94,.66)*(cursorSpecular*.85+cursorDiffuse*.13)*uHover;
    color=mix(color,vec3(.03,.06,.06),1.-exp(-.014*t*t));
  }
  // Fine photographic grain and a restrained vignette keep the scene tactile.
@@ -107,7 +114,7 @@ export function createCinemaRenderer(canvas) {
     const position = gl.getAttribLocation(program,'aPosition');
     gl.enableVertexAttribArray(position);
     gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-    const uniforms = Object.fromEntries(['uResolution','uTime','uProgress','uPointer'].map(name=>[name,gl.getUniformLocation(program,name)]));
+    const uniforms = Object.fromEntries(['uResolution','uTime','uProgress','uPointer','uHover'].map(name=>[name,gl.getUniformLocation(program,name)]));
     return {
       resize(width,height) {
         // Bound the shader workload on high-density mobile displays.
@@ -122,6 +129,7 @@ export function createCinemaRenderer(canvas) {
         gl.uniform1f(uniforms.uTime,time);
         gl.uniform1f(uniforms.uProgress,progress);
         gl.uniform2f(uniforms.uPointer,pointer.x,pointer.y);
+        gl.uniform1f(uniforms.uHover,pointer.active||0);
         gl.drawArrays(gl.TRIANGLES,0,3);
       }
     };

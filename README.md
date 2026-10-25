@@ -22,6 +22,8 @@ La apertura ocupa toda la pantalla. Una escultura metálica original se renderiz
 
 `js/cinema-renderer.js` contiene los shaders de la escultura, su iluminación y los límites de resolución. No hay dependencias, modelos, videos ni imágenes de la referencia. El render se limita a aproximadamente 30 fps y se detiene fuera de la sección o al ocultar la pestaña. Un botón pausa el movimiento autónomo. El scroll sigue siendo nativo.
 
+`js/cinema-particles.js` dibuja un campo de partículas con perspectiva sobre la escena: 148 puntos en escritorio y 64 en móvil. Cerca del cursor se desplazan con inercia y un giro suave, con conexiones locales limitadas, una estela breve y un halo tenue. Los reflejos de la escultura también siguen el mouse. Se atenúa el efecto sobre el área de texto y no se capturan gestos táctiles. La pausa y el movimiento reducido afectan tanto a la escultura como a las partículas; las capas decorativas no bloquean enlaces ni navegación.
+
 `css/scroll-story.css` adapta la escena a escritorio y móvil. `js/scroll-story.js` vincula el scroll con la cámara y la entrada de textos, y revela el resto del contenido con IntersectionObserver. `js/scroll-math.js` calcula las transiciones sin superponer titulares.
 
 Sin JavaScript se muestra una composición gráfica estática. Si WebGL no está disponible, se conserva esa alternativa visual junto con la entrada de textos. Con movimiento reducido o en ventanas de hasta 520 px de alto se elimina el tramo de scroll prolongado. La navegación permite ir directamente a proyectos y contacto.
