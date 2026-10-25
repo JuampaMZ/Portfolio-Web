@@ -1,6 +1,5 @@
 import { clamp01, scrollProgress, storyState } from './scroll-math.js';
 import { createCinemaRenderer } from './cinema-renderer.js';
-import { createHologramField } from './cinema-particles.js';
 
 export function initScrollStory() {
   const section = document.querySelector('.cinema');
@@ -9,7 +8,6 @@ export function initScrollStory() {
   const header = document.querySelector('.header');
   const stage = section.querySelector('.cinema-sticky');
   const canvas = section.querySelector('.cinema-canvas');
-  const hologramCanvas = section.querySelector('.cinema-hologram');
   const acts = [...section.querySelectorAll('[data-story-act]')];
   const lines = acts.map(act => [...act.querySelectorAll('.cinema-line>span')]);
   const counter = section.querySelector('.cinema-count');
@@ -20,7 +18,6 @@ export function initScrollStory() {
   const targetPointer = {x:0,y:0,active:0,speed:0};
   let lastPointer=null;
   let renderer = createCinemaRenderer(canvas);
-  const hologram = createHologramField(hologramCanvas);
   let progress = 0;
   let active = -1;
   let visible = true;
@@ -47,12 +44,11 @@ export function initScrollStory() {
     pointer.speed += (targetPointer.speed-pointer.speed)*.15;
     targetPointer.speed *= .9;
     if (now-lastDraw >= 32) {
-      const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:pointer;
-      renderer?.draw(animationTime,progress,effectPointer);
-      hologram?.draw(animationTime,progress,effectPointer,animated);
+      const effectPointer=preference.matches||paused?{x:0,y:0,active:0,speed:0}:{...pointer,rawX:targetPointer.x,rawY:targetPointer.y,rawActive:targetPointer.active};
+      renderer?.draw(animationTime,progress,effectPointer,animated);
       lastDraw = now;
     }
-    if (animated && (renderer||hologram)) requestFrame();
+    if (animated && renderer) requestFrame();
   }
   function updateScroll() {
     scrollRequested = false;
@@ -93,7 +89,6 @@ export function initScrollStory() {
   function resize() {
     root.style.setProperty('--header-height',`${header.offsetHeight}px`);
     renderer?.resize(stage.clientWidth,stage.clientHeight);
-    hologram?.resize(stage.clientWidth,stage.clientHeight);
     lastDraw=-100;
     requestScroll();
   }
@@ -108,7 +103,7 @@ export function initScrollStory() {
   });
   function applyPreference() {
     root.classList.toggle('scroll-enhanced',!preference.matches&&!shortViewport.matches);
-    pauseButton.hidden=(!renderer&&!hologram)||preference.matches;
+    pauseButton.hidden=!renderer||preference.matches;
     if(preference.matches||shortViewport.matches) revealTargets.forEach(target=>target.classList.add('is-revealed'));
     previousTime=0;
     resize();
@@ -140,13 +135,13 @@ export function initScrollStory() {
     lastPointer={x,y,time:event.timeStamp};
   },{passive:true});
   function clearPointer(){
-    targetPointer.x=0;targetPointer.y=0;targetPointer.active=0;targetPointer.speed=0;lastPointer=null;
+    targetPointer.active=0;targetPointer.speed=0;lastPointer=null;
   }
   stage.addEventListener('pointerleave',clearPointer);
   stage.addEventListener('pointercancel',clearPointer);
   window.addEventListener('blur',clearPointer);
   canvas.addEventListener('webglcontextlost',event=>{
-    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=!hologram;
+    event.preventDefault();section.classList.remove('has-renderer');renderer=null;pauseButton.hidden=true;
   });
   canvas.addEventListener('webglcontextrestored',()=>{
     renderer=createCinemaRenderer(canvas);section.classList.toggle('has-renderer',Boolean(renderer));applyPreference();

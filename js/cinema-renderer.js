@@ -1,152 +1,248 @@
-// Original full-screen sculpture. No video downloads or third-party runtime.
-const vertexSource = `attribute vec2 aPosition;
-void main(){gl_Position=vec4(aPosition,0.,1.);}`;
+import { createDissolveTrail } from './cinema-particles.js';
 
-const fragmentSource = `
+const commonSource=`
 precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uProgress;
 uniform vec2 uPointer;
 uniform float uHover;
+uniform vec4 uTouches[5];
+vec2 gCenter;float gZoom;vec3 gCamera;
 mat2 rotate(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
+float smoothUnion(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+void setupCamera(){
+ float mobile=1.-step(1.,uResolution.x/uResolution.y);
+ gCenter=mix(vec2(.38,.10),vec2(0.,.15),mobile);
+ gZoom=1.+.09*sin(uProgress*3.14159);
+ gCamera=vec3(0.,.08,mix(5.5,8.8,mobile)-uProgress*mix(1.1,.55,mobile));
+}
+float yaw(){return uProgress*4.8+uTime*.075+uPointer.x*uHover*.16;}
+float roll(){return -.45+uProgress*1.2;}
+float pitch(){return .45+sin(uTime*.09)*.14+uPointer.y*uHover*.10;}
 vec3 localPoint(vec3 p){
- p.xz=rotate(.18+uProgress*6.283185+sin(uTime*.16)*.18+uPointer.x*.22)*p.xz;
- p.xy=rotate(.06+sin(uTime*.11)*.035+uProgress*.08)*p.xy;
- p.yz=rotate(.08+sin(uTime*.13)*.08+uPointer.y*.13)*p.yz;
- return p;
+ p.xz=rotate(yaw())*p.xz;p.xy=rotate(roll())*p.xy;p.yz=rotate(pitch())*p.yz;return p;
 }
-float extrude(float planar,float depth){
- vec2 d=vec2(planar,depth);
- return min(max(d.x,d.y),0.)+length(max(d,0.))-.025;
+vec3 worldPoint(vec3 p){
+ p.yz=rotate(-pitch())*p.yz;p.xy=rotate(-roll())*p.xy;p.xz=rotate(-yaw())*p.xz;return p;
 }
-float halfRing(vec3 p,float side){
- // Proportions taken from the two half-annuli in Craft Studio's SVG mark.
- float ring=max(length(p.xy)-.94,.52-length(p.xy));
- float silhouette=max(ring,p.x*side);
- return extrude(silhouette,abs(p.z)-.17);
+float ribbon(vec3 p,float phase){
+ float a=atan(p.z,p.x);
+ float radius=1.23+.13*sin(a*3.+phase);
+ vec2 crossSection=vec2(length(p.xz)-radius,p.y-.24*sin(a*2.+phase));
+ crossSection=rotate(a*1.5+phase)*crossSection;
+ return (length(crossSection/vec2(.22,.38))-1.)*.20;
 }
-float spineDistance(vec3 p){
- vec3 d=abs(p)-vec3(.023,1.39,.19);
- return min(max(d.x,max(d.y,d.z)),0.)+length(max(d,0.))-.012;
+float rawShape(vec3 p){
+ float a=ribbon(p,0.);
+ vec3 q=p;q.yz=rotate(1.2+uProgress*.5)*q.yz;q.xy=rotate(.5)*q.xy;
+ return smoothUnion(a,ribbon(q,2.1),.12);
 }
-float scene(vec3 p){
- p=localPoint(p);
- float left=halfRing(p-vec3(-.123,.45,0.),1.);
- float right=halfRing(p-vec3(.123,-.45,0.),-1.);
- return min(min(left,right),spineDistance(p));
+vec2 projectPoint(vec3 p){return (p.xy-gCamera.xy)*2.4*gZoom/(1.8*(gCamera.z-p.z))+gCenter;}
+float damageAt(vec2 screen){
+ float damage=0.;
+ for(int i=0;i<5;i++){
+  float radius=max(uTouches[i].w,.0001);
+  float falloff=1.-smoothstep(radius*.22,radius,length(screen-uTouches[i].xy));
+  damage=max(damage,uTouches[i].z*falloff);
+ }
+ return damage;
+}
+float hash(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+`;
+
+const vertexSource=`attribute vec2 aPosition;void main(){gl_Position=vec4(aPosition,0.,1.);}`;
+const fragmentSource=commonSource+`
+float gDamage;
+float beamX(){return sin(uTime*.32)*.11;}
+float beamDistance(vec3 p){
+ vec2 d=vec2(length(p.xz-vec2(beamX(),1.25))-.010,abs(p.y)-1.54);
+ return min(max(d.x,d.y),0.)+length(max(d,0.));
+}
+vec2 mapScene(vec3 p){
+ vec3 local=localPoint(p);
+ float body=rawShape(local);
+ if(gDamage>.001){
+  float wave=sin(local.x*13.+uTime*2.1)*sin(local.y*11.-uTime*1.7)*sin(local.z*9.+uTime);
+  body+=gDamage*(.36+wave*.032);
+ }
+ float beam=beamDistance(p);
+ return body<beam?vec2(body,0.):vec2(beam,2.);
 }
 vec3 normalAt(vec3 p){
  vec2 e=vec2(.002,0.);
- return normalize(vec3(scene(p+e.xyy)-scene(p-e.xyy),scene(p+e.yxy)-scene(p-e.yxy),scene(p+e.yyx)-scene(p-e.yyx)));
+ return normalize(vec3(mapScene(p+e.xyy).x-mapScene(p-e.xyy).x,mapScene(p+e.yxy).x-mapScene(p-e.yxy).x,mapScene(p+e.yyx).x-mapScene(p-e.yyx).x));
 }
 vec3 environment(vec3 d){
  vec3 color=vec3(.018,.026,.031);
- float strip=pow(max(0.,dot(d,normalize(vec3(-.5,1.,.7)))),24.);
- float soft=pow(max(0.,dot(d,normalize(vec3(1.,.3,-.6)))),7.);
- float edge=pow(max(0.,dot(d,normalize(vec3(-1.,-.15,-.8)))),34.);
- color+=vec3(.91,1.,.81)*strip*2.6;
- color+=vec3(.35,.59,.57)*soft*.8;
- color+=vec3(.91,.66,.37)*edge*1.8;
+ color+=vec3(.91,1.,.81)*pow(max(0.,dot(d,normalize(vec3(-.5,1.,.7)))),24.)*2.6;
+ color+=vec3(.35,.59,.57)*pow(max(0.,dot(d,normalize(vec3(1.,.3,-.6)))),7.)*.8;
+ color+=vec3(.91,.66,.37)*pow(max(0.,dot(d,normalize(vec3(-1.,-.15,-.8)))),34.)*1.8;
  return color;
 }
-float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 void main(){
- vec2 uv=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
- float mobile=1.-step(1.,uResolution.x/uResolution.y);
- vec2 center=mix(vec2(.38,.03),vec2(0.,.17),mobile);
- uv-=center;
- float zoom=1.+.09*sin(uProgress*3.14159);
- vec3 ro=vec3(0.,.02,mix(5.7,9.6,mobile)-.6*uProgress);
- vec3 rd=normalize(vec3(uv*1.8/zoom,-2.4));
- vec3 color=vec3(.016,.026,.035);
- float halo=exp(-length(uv*vec2(.85,1.))*2.5);
- color+=vec3(.06,.13,.12)*halo;
- float t=0.;float distanceToSurface=0.;bool hit=false;
- for(int i=0;i<84;i++){
-   vec3 p=ro+rd*t;distanceToSurface=scene(p);
-   if(distanceToSurface<.0015){hit=true;break;}
-   t+=max(distanceToSurface*.8,.003);
-   if(t>10.)break;
+ setupCamera();
+ vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
+ vec2 uv=screen-gCenter;
+ gDamage=damageAt(screen);
+ vec3 ro=gCamera,rd=normalize(vec3(uv*1.8/gZoom,-2.4));
+ vec3 color=vec3(.016,.026,.035)+vec3(.06,.13,.12)*exp(-length(uv*vec2(.85,1.))*2.5);
+ float t=0.;vec2 sampleValue=vec2(0.);bool hit=false;
+ for(int i=0;i<100;i++){
+  sampleValue=mapScene(ro+rd*t);
+  if(sampleValue.x<.0015){hit=true;break;}
+  t+=max(sampleValue.x*(gDamage>.01?.55:.8),.002);
+  if(t>13.)break;
  }
  if(hit){
-   vec3 p=ro+rd*t;vec3 n=normalAt(p);vec3 reflected=reflect(rd,n);
-   vec3 light=normalize(vec3(-.7,1.,1.));
-   float diffuse=max(dot(n,light),0.);
+  vec3 p=ro+rd*t;
+  if(sampleValue.y>1.){
+   color=vec3(4.2,5.1,3.9);
+  }else{
+   vec3 n=normalAt(p),reflected=reflect(rd,n);
+   float diffuse=max(dot(n,normalize(vec3(-.7,1.,1.))),0.);
    float fresnel=pow(1.-max(dot(-rd,n),0.),3.);
-   vec3 local=localPoint(p);
-   float spine=1.-step(.055,abs(local.x));
-   vec3 base=mix(vec3(.52,.64,.61),vec3(.78,.83,.74),.5+.5*sin(local.y*1.7));
-   color=base*(.24+diffuse*.60)+environment(reflected)*(.60+fresnel*.6);
+   vec3 base=mix(vec3(.17,.25,.20),vec3(.43,.56,.40),.5+.5*sin(localPoint(p).y*2.));
+   color=base*(.16+diffuse*.22)+environment(reflected)*(.55+fresnel*.6);
    color+=vec3(.57,.77,.52)*pow(max(dot(n,normalize(vec3(.9,-.2,.2))),0.),5.)*.3;
-   vec2 cursorUV=vec2(uPointer.x*.5*uResolution.x/uResolution.y,-uPointer.y*.5)-center;
-   vec3 cursorLight=vec3(cursorUV*3.5,3.);
-   vec3 cursorDirection=normalize(cursorLight-p);
-   float cursorSpecular=pow(max(dot(reflect(-cursorDirection,n),-rd),0.),32.);
-   float cursorDiffuse=pow(max(dot(n,cursorDirection),0.),4.);
-   color+=vec3(.73,.94,.66)*(cursorSpecular*.85+cursorDiffuse*.13)*uHover;
-   float scan=exp(-pow((local.y-sin(uTime*.36+uProgress*3.)*1.5)*35.,2.));
-   color+=vec3(.30,.83,.71)*scan*.16;
-   color+=vec3(.46,.85,.56)*spine*(.28+uHover*.14);
+   float beamLight=exp(-length(p.xz-vec2(beamX(),1.25))*2.6);
+   float energyPulse=exp(-pow((p.y-sin(uTime*.6)*1.45)*6.,2.));
+   color+=vec3(.48,.78,.46)*beamLight*(.30+energyPulse*.22);
+   color+=vec3(.53,.82,.67)*gDamage*pow(1.-abs(dot(n,-rd)),2.)*.3;
    color=mix(color,vec3(.03,.06,.06),1.-exp(-.014*t*t));
+  }
  }
- // Fine photographic grain and a restrained vignette keep the scene tactile.
- color+=vec3((hash(gl_FragCoord.xy)-.5)*.007);
+ // Bloom is occluded by the surface, so the luminous spine passes through it.
+ vec2 beamDelta=vec2(beamX(),1.25)-ro.xz;
+ float nearTime=max(0.,dot(beamDelta,rd.xz)/dot(rd.xz,rd.xz));
+ vec3 nearPoint=ro+rd*nearTime;
+ float beamRadius=length(nearPoint.xz-vec2(beamX(),1.25));
+ float cap=1.-smoothstep(1.40,1.72,abs(nearPoint.y));
+ float visibility=hit&&nearTime>t+.03?.10:1.;
+ float energyPulse=exp(-pow((nearPoint.y-sin(uTime*.6)*1.45)*6.,2.));
+ color+=vec3(.56,.94,.66)*cap*visibility*(exp(-beamRadius*22.)*.38+exp(-beamRadius*95.)*.75)*(1.+energyPulse*.9);
+ color+=vec3((hash(vec3(gl_FragCoord.xy,0.))-.5)*.007);
  color*=1.-.24*pow(length((gl_FragCoord.xy/uResolution-.5)*1.2),2.);
- color=vec3(1.)-exp(-color*1.35);
- color=pow(max(color,0.),vec3(.88));
+ color=pow(vec3(1.)-exp(-max(color,0.)*1.35),vec3(.88));
  gl_FragColor=vec4(color,1.);
 }`;
 
+const particleVertexSource=commonSource+`
+attribute vec4 aSeed;
+varying float vOpacity;
+varying float vWarm;
+varying float vGlint;
+void main(){
+ setupCamera();
+ float a=aSeed.x,b=aSeed.y,phase=aSeed.z>.5?2.1:0.;
+ vec2 crossSection=rotate(-(a*1.5+phase))*vec2(.22*cos(b),.38*sin(b));
+ float radius=1.23+.13*sin(a*3.+phase);
+ vec3 local=vec3((radius+crossSection.x)*cos(a),.24*sin(a*2.+phase)+crossSection.y,(radius+crossSection.x)*sin(a));
+ vec2 crossNormal=rotate(-(a*1.5+phase))*vec2(cos(b)/.22,sin(b)/.38);
+ vec3 normal=normalize(vec3(crossNormal.x*cos(a),crossNormal.y,crossNormal.x*sin(a)));
+ if(aSeed.z>.5){
+  local.xy=rotate(-.5)*local.xy;local.yz=rotate(-1.2-uProgress*.5)*local.yz;
+  normal.xy=rotate(-.5)*normal.xy;normal.yz=rotate(-1.2-uProgress*.5)*normal.yz;
+ }
+ vec3 origin=worldPoint(local);
+ vec3 worldNormal=worldPoint(normal);
+ float damage=damageAt(projectPoint(origin));
+ float interior=1.-smoothstep(-.07,-.015,rawShape(local));
+ float facing=smoothstep(-.18,.45,dot(normalize(gCamera-origin),worldNormal));
+ // Thousands of points are anchored on the actual ribbon surface. The same
+ // damage field removes that surface while these points flow out and return.
+ vec3 curl=vec3(
+  sin(local.y*3.6+local.z*1.8+uTime*1.2),
+  cos(local.z*3.3+local.x*1.7-uTime*1.1),
+  sin(local.x*3.7+local.y*1.6+uTime*.9)
+ );
+ vec3 flow=normal*(.12+.26*aSeed.w)+curl*.24+cross(normal,curl)*.12;
+ vec3 position=worldPoint(local+flow*damage);
+ vec2 projected=projectPoint(position);
+ gl_Position=vec4(projected*vec2(2.*uResolution.y/uResolution.x,2.),0.,1.);
+ float distanceToCamera=length(gCamera-position);
+ gl_PointSize=clamp((1.1+aSeed.w*1.8)*(1.+.35*(1.-damage))*(5.5/distanceToCamera)*(uResolution.y/720.),.8,4.2);
+ vOpacity=smoothstep(.025,.18,damage)*(.32+.48*aSeed.w)*facing*(1.-interior);
+ vWarm=aSeed.w;
+ vGlint=.5+.5*sin(aSeed.w*53.+uTime*1.6);
+ if(vOpacity<.008)gl_Position=vec4(3.,3.,0.,1.);
+}`;
+const particleFragmentSource=`
+precision mediump float;
+varying float vOpacity;varying float vWarm;varying float vGlint;
+void main(){
+ vec2 uv=gl_PointCoord*2.-1.;float radius=dot(uv,uv);if(radius>1.)discard;
+ float sphere=sqrt(max(0.,1.-radius));
+ float edge=1.-smoothstep(.58,1.,radius);
+ vec3 tint=mix(vec3(.68,.90,.75),vec3(.94,.82,.57),step(.78,vWarm));
+ float spec=pow(max(0.,1.-length(uv-vec2(-.24,.26))),5.);
+ vec3 color=tint*(.42+sphere*.6)+vec3(spec*(.7+vGlint*.5));
+ gl_FragColor=vec4(color,vOpacity*edge);
+}`;
+
 export function createCinemaRenderer(canvas) {
-  const gl = canvas.getContext('webgl', { alpha:false, antialias:false, depth:false, powerPreference:'low-power' });
-  if (!gl) return null;
-  const shaders = [];
-  let program;
-  let buffer;
-  try {
-    for (const [type, source] of [[gl.VERTEX_SHADER,vertexSource],[gl.FRAGMENT_SHADER,fragmentSource]]) {
-      const shader = gl.createShader(type);
-      shaders.push(shader);
-      gl.shaderSource(shader,source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
-    }
-    program = gl.createProgram();
-    shaders.forEach(shader => gl.attachShader(program,shader));
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
-    gl.useProgram(program);
-    buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
-    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
-    const position = gl.getAttribLocation(program,'aPosition');
-    gl.enableVertexAttribArray(position);
-    gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-    const uniforms = Object.fromEntries(['uResolution','uTime','uProgress','uPointer','uHover'].map(name=>[name,gl.getUniformLocation(program,name)]));
-    return {
-      resize(width,height) {
-        // Bound the shader workload on high-density mobile displays.
-        const ratio = Math.min(devicePixelRatio || 1, width < 700 ? 1.1 : 1, 1200 / width);
-        canvas.width = Math.round(width*ratio);
-        canvas.height = Math.round(height*ratio);
-        gl.viewport(0,0,canvas.width,canvas.height);
-        gl.uniform2f(uniforms.uResolution,canvas.width,canvas.height);
-      },
-      draw(time,progress,pointer) {
-        if (gl.isContextLost()) return;
-        gl.uniform1f(uniforms.uTime,time);
-        gl.uniform1f(uniforms.uProgress,progress);
-        gl.uniform2f(uniforms.uPointer,pointer.x,pointer.y);
-        gl.uniform1f(uniforms.uHover,pointer.active||0);
-        gl.drawArrays(gl.TRIANGLES,0,3);
-      }
-    };
-  } catch (error) {
-    console.warn('La escena 3D usa su alternativa visual.', error.message);
-    if (buffer) gl.deleteBuffer(buffer);
-    if (program) gl.deleteProgram(program);
-    shaders.forEach(shader=>gl.deleteShader(shader));
-    return null;
+ const gl=canvas.getContext('webgl',{alpha:false,antialias:false,depth:false,powerPreference:'low-power'});
+ if(!gl)return null;
+ const shaders=[],programs=[],buffers=[];
+ const trail=createDissolveTrail();
+ let width=1,height=1;
+ let heldPointer={x:0,y:0,active:0,speed:0};
+ function programFor(vertex,fragment){
+  const program=gl.createProgram();programs.push(program);
+  for(const [type,source]of[[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]){
+   const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,source);gl.compileShader(shader);
+   if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));
+   gl.attachShader(program,shader);
   }
+  gl.linkProgram(program);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+  const uniforms=Object.fromEntries(['uResolution','uTime','uProgress','uPointer','uHover','uTouches[0]'].map(name=>[name,gl.getUniformLocation(program,name)]));
+  return {program,uniforms};
+ }
+ function bufferFor(data){const buffer=gl.createBuffer();buffers.push(buffer);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);return buffer;}
+ try{
+  const surface=programFor(vertexSource,fragmentSource);
+  const fragments=programFor(particleVertexSource,particleFragmentSource);
+  const triangle=bufferFor(new Float32Array([-1,-1,3,-1,-1,3]));
+  const seeds=new Float32Array(48000*4);
+  for(let index=0;index<48000;index++){
+   seeds[index*4]=(index*.61803398875%1)*Math.PI*2;
+   seeds[index*4+1]=(index*.75487766625%1)*Math.PI*2;
+   seeds[index*4+2]=index%2;
+   seeds[index*4+3]=(index*.56984029099%1);
+  }
+  const particleBuffer=bufferFor(seeds);
+  function uniformsFor(target,time,progress,pointer,touches){
+   gl.useProgram(target.program);const u=target.uniforms;
+   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uTime,time);gl.uniform1f(u.uProgress,progress);
+   gl.uniform2f(u.uPointer,pointer.x,pointer.y);gl.uniform1f(u.uHover,pointer.active||0);gl.uniform4fv(u['uTouches[0]'],touches);
+  }
+  return {
+   resize(nextWidth,nextHeight){
+    width=nextWidth;height=nextHeight;
+    const ratio=Math.min(devicePixelRatio||1,width<700?1.1:1,1100/width);
+    canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);gl.viewport(0,0,canvas.width,canvas.height);
+    trail.reset();
+   },
+   draw(time,progress,pointer,moving=true){
+    if(gl.isContextLost())return;
+    if(moving)heldPointer={...pointer};
+    const effectPointer=moving?pointer:heldPointer;
+    const touches=trail.advance(time,(effectPointer.rawX??effectPointer.x)*.5*width/height,-(effectPointer.rawY??effectPointer.y)*.5,effectPointer.rawActive??effectPointer.active??0,Math.min(130,height*.17)/height,moving);
+    gl.disable(gl.BLEND);uniformsFor(surface,time,progress,effectPointer,touches);
+    gl.bindBuffer(gl.ARRAY_BUFFER,triangle);const position=gl.getAttribLocation(surface.program,'aPosition');
+    gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,3);
+    if(touches.some((value,index)=>index%4===2&&value>.005)){
+     uniformsFor(fragments,time,progress,effectPointer,touches);
+     gl.bindBuffer(gl.ARRAY_BUFFER,particleBuffer);const seed=gl.getAttribLocation(fragments.program,'aSeed');
+     gl.enableVertexAttribArray(seed);gl.vertexAttribPointer(seed,4,gl.FLOAT,false,0,0);
+     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+     gl.drawArrays(gl.POINTS,0,width<700?24000:48000);gl.disable(gl.BLEND);
+    }
+   }
+  };
+ }catch(error){
+  console.warn('La escena usa su alternativa estática.',error.message);
+  buffers.forEach(buffer=>gl.deleteBuffer(buffer));programs.forEach(program=>gl.deleteProgram(program));shaders.forEach(shader=>gl.deleteShader(shader));return null;
+ }
 }
