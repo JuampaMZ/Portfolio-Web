@@ -1,4 +1,4 @@
-import { pointerRotationSpeed, prismLayout } from './motion.js';
+import { pointerRotationSpeed, prismLayout, viewportPointerPosition } from './motion.js';
 
 const menuButton = document.querySelector('.menu-toggle');
 const navigation = document.querySelector('#navigation');
@@ -32,6 +32,7 @@ let activeFace = -1;
 let angle = 0;
 let userPaused = motionPreference.matches;
 let pointerPosition = null;
+let mouseCoordinates = null;
 let keyboardMode = false;
 let velocity = 4;
 let touching = false;
@@ -166,15 +167,27 @@ playback.addEventListener('click', () => {
   // Give control back to the region so focus does not keep a resumed animation paused.
   if (!userPaused) { playback.blur(); browser.blur(); manualUntil = 0; }
 });
-browser.addEventListener('pointermove', event => {
-  if (event.pointerType !== 'mouse') return;
+function updatePointerPosition() {
+  if (!mouseCoordinates) { pointerPosition = null; return; }
   const bounds = browser.getBoundingClientRect();
-  pointerPosition = Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1));
+  // Listen across the viewport, including the margins outside the cards.
+  // Leaving a card or the content column must not reset edge acceleration.
+  const insideBand = mouseCoordinates.y >= bounds.top && mouseCoordinates.y <= bounds.bottom;
+  pointerPosition = insideBand ? viewportPointerPosition(mouseCoordinates.x, document.documentElement.clientWidth) : null;
+  if (insideBand && !turnAnimation) manualUntil = 0;
+}
+document.addEventListener('pointermove', event => {
+  if (event.pointerType !== 'mouse') return;
+  mouseCoordinates = { x: event.clientX, y: event.clientY };
   keyboardMode = false;
-  // Steering takes control immediately after a manual advance has finished.
-  if (!turnAnimation) manualUntil = 0;
+  updatePointerPosition();
+}, { passive: true });
+document.addEventListener('pointerout', event => {
+  if (event.relatedTarget === null) { mouseCoordinates = null; pointerPosition = null; }
 });
-browser.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') pointerPosition = null; });
+window.addEventListener('blur', () => { mouseCoordinates = null; pointerPosition = null; });
+window.addEventListener('scroll', updatePointerPosition, { passive: true });
+window.addEventListener('resize', updatePointerPosition);
 document.addEventListener('keydown', () => { keyboardMode = true; });
 document.addEventListener('pointerdown', () => { keyboardMode = false; });
 browser.addEventListener('focusin', () => {

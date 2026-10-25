@@ -23,3 +23,5 @@ Editar textos y enlaces en `index.html`, estilos en `css/portfolio.css`, comport
 Sitio: https://juan-pablo-craft-portfolio.vercel.app/
 
 Publicación directa con Vercel CLI al proyecto `juan-pablo-craft-portfolio` del equipo `juans-projects-079dba21`. Configuración en `vercel.json`: framework Other, `npm run build`, salida `dist`. No hay sincronización automática con GitHub.
+
+Las caras del polígono tienen una separación adaptable de 18 a 36 px, con borde y sombras de espesor. La detección del cursor cubre todo el ancho de la pantalla mientras está a la altura del carrusel, incluidos los márgenes exteriores. La velocidad máxima llega a 72 grados por segundo; el centro conserva su zona de pausa.
