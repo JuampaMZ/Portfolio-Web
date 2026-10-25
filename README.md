@@ -8,23 +8,23 @@ Node.js 20 o posterior. `npm run dev` inicia http://127.0.0.1:4173. `npm run che
 
 El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni demostraciones retiradas. Los archivos históricos se conservan en el repositorio.
 
-## Apertura y simulación de fragmentos
+## Apertura y fragmentación sólida
 
-La apertura ocupa toda la pantalla con dos cintas orgánicas entrelazadas y una barra luminosa central. El acabado metálico y el eje salvia mantienen la referencia sutil a Craft Studio. El scroll cambia la orientación de la pieza y presenta tres titulares.
+La apertura ocupa toda la pantalla con dos cintas orgánicas entrelazadas y una barra luminosa central. La superficie conserva su forma y su acabado metálico. El scroll cambia la orientación de la pieza y presenta tres titulares.
 
-La fragmentación usa un sistema de partículas con estado persistente: cada fragmento tiene posición, velocidad, masa, radio y anclaje a la superficie. Se reemplazaron los recorridos calculados directamente con senos y el rebote que recolocaba puntos en una circunferencia.
+Solo el desplazamiento real del mouse sobre la superficie original genera rotura. La rotación de la pieza, un cursor quieto y los cráteres existentes no emiten fragmentos. Los cortes están anclados al espacio de la pieza, con bordes definidos y sin deformación líquida. Las trayectorias rápidas se muestrean en hasta 16 contactos por frame para evitar saltos entre posiciones del cursor.
 
-- `js/particle-physics.js`: muestreo irregular de las cintas, integración a paso fijo de 1/60 s, inercia, resortes amortiguados, núcleo esférico localizado sobre la superficie original, choques que reflejan la velocidad relativa al núcleo, y contactos entre fragmentos mediante una rejilla espacial. Incluye intercambio local de velocidad, cohesión suave y absorción final en la superficie. Es una simulación de partículas; no un solver completo de fluidos.
-- `js/cinema-renderer.js`: superficie implícita y fragmentos WebGL. Los fragmentos reciben posiciones y velocidades calculadas por el simulador. Se usa un búfer de profundidad mediante EXT_frag_depth cuando está disponible, para ocultar los que pasan detrás de la pieza. Sin esa extensión se conserva una alternativa por distancia a la superficie.
-- `js/cinema-particles.js`: impacto según velocidad del cursor y memoria de cinco zonas de daño. La recuperación visual de la superficie también tiene en cuenta cuánto se han separado los fragmentos de sus anclajes.
-- `js/scroll-story.js`: captura del cursor, scroll nativo, pausa, movimiento reducido y aparición de contenido con IntersectionObserver.
-- `js/scroll-math.js`: capítulos y transiciones sin titulares superpuestos.
+- js/particle-physics.js: muestras irregulares sobre las cintas, posición y velocidad persistentes, integración a paso fijo de 1/120 s y gravedad de cuadrado inverso suavizada. Los fragmentos reciben momento tangencial al romperse; su órbita surge de la integración, sin trayectoria circular impuesta. El núcleo esférico refleja la velocidad de los fragmentos que lo golpean. Al salir el cursor, una fase de captura los devuelve a sus anclajes móviles y se cierran los cortes.
+- js/cinema-renderer.js: superficie implícita con hasta 24 cortes locales. Los fragmentos son mallas de ocho caras planas, con rotación, iluminación metálica y profundidad. ANGLE_instanced_arrays dibuja las mallas en una llamada; sin esa extensión se expanden los mismos triángulos. EXT_frag_depth permite ocultarlos detrás de la pieza; sin esa extensión hay una alternativa por distancia a la superficie.
+- js/cinema-particles.js: impacto según velocidad del mouse y núcleo compacto de 16 a 26 píxeles CSS. La velocidad amplía la fractura y el impulso inicial.
+- js/scroll-story.js: captura del cursor, scroll nativo, pausa, movimiento reducido y aparición de contenido con IntersectionObserver.
+- js/scroll-math.js: capítulos y transiciones sin titulares superpuestos.
 
-La velocidad del mouse modifica el alcance y la fuerza del impacto. El núcleo permanece activo al detenerlo y las partículas chocan con su volumen en 3D. Al apartarlo, las fuerzas elásticas las devuelven a los anclajes móviles de la pieza. El muestreo irregular evita las filas repetidas del sistema anterior.
+El centro de gravedad sigue al mouse sobre un plano de profundidad estable, fijado al primer contacto. No hay viscosidad, cohesión ni ruido que deforme o rompa la pieza. La gravedad actúa únicamente sobre los fragmentos desprendidos. Mantener el cursor quieto conserva el núcleo y las órbitas.
 
-El banco contiene 18.000 muestras en escritorio y 6.000 en móvil. Se limita a 3.200 y 1.200 fragmentos activos, respectivamente; solo se envían al render los activos. La simulación duerme cuando no hay daño ni fragmentos pendientes. El render tiene resolución limitada y un objetivo aproximado de 30 fps; la integración física es independiente de la frecuencia de dibujo.
+El banco contiene 26.000 muestras en escritorio y 9.000 en móvil. Se limita a 2.000 y 700 fragmentos activos, respectivamente; solo se envían al render los activos. El render tiene resolución limitada y un objetivo aproximado de 30 fps; la integración física es independiente de la frecuencia de dibujo.
 
-La pausa conserva posiciones y velocidades. Fuera de vista o con la pestaña oculta se detiene el render. Con movimiento reducido la escena es estática. Sin WebGL se presenta el logo SVG. En ventanas de hasta 520 px de alto se elimina el tramo de scroll prolongado. Los gestos táctiles no generan destrucción ni interfieren con el desplazamiento.
+La pausa conserva posiciones, velocidades y cortes. Fuera de vista o con la pestaña oculta se detiene el render. Con movimiento reducido la escena es estática. Sin WebGL se presenta el logo SVG. En ventanas de hasta 520 px de alto se elimina el tramo de scroll prolongado. Los gestos táctiles no generan destrucción ni interfieren con el desplazamiento.
 
 ## Contenido y proyectos
 
@@ -38,7 +38,7 @@ El giro automático es lento; el centro del cursor lo detiene y los bordes aumen
 
 ## Validación
 
-Las pruebas verifican las transiciones, la respuesta a la velocidad y la memoria de daño, además de muestreo de superficie, inercia, restitución con pérdida de energía, exclusión del núcleo, reconstrucción completa con la pieza en movimiento, pausa y estabilidad entre frecuencias de dibujo. La revisión visual comprueba oclusión, interacción, composición móvil y controles del portfolio.
+Las 19 pruebas verifican transiciones y prisma, núcleo compacto, muestreo sobre la superficie, contacto exclusivo para emitir fragmentos, alcance según velocidad, gravedad y órbita libre, inercia, restitución, exclusión del núcleo, reconstrucción con la pieza en movimiento, pausa y estabilidad entre frecuencias de dibujo. La revisión visual comprueba fragmentos con volumen, oclusión, interacción y composición móvil.
 
 ## Publicación
 

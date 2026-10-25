@@ -83,20 +83,26 @@ export function resolveSphereContact(positions,velocities,offset,center,coreVelo
   return true;
 }
 
-export function createParticleSimulation({count=22000,maxActive=4500,seed=72819}={}) {
+
+// Softened inverse-square gravity. Tangential momentum comes from the impact,
+// not an imposed orbit or a time-dependent flow field.
+export function gravityAcceleration(position,center,mu=.48,softening=.10) {
+  const dx=center[0]-position[0],dy=center[1]-position[1],dz=center[2]-position[2];
+  const denominator=Math.pow(dx*dx+dy*dy+dz*dz+softening*softening,1.5);
+  return [mu*dx/denominator,mu*dy/denominator,mu*dz/denominator];
+}
+
+export function createParticleSimulation({count=22000,maxActive=1800,seed=72819}={}) {
   let state=seed>>>0;
   const random=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return (state>>>0)/4294967296;};
   const rest=new Float32Array(count*3),normals=new Float32Array(count*3),targets=new Float32Array(count*3);
   const positions=new Float32Array(count*3),velocities=new Float32Array(count*3),active=new Uint8Array(count);
-  const targetVelocity=new Float32Array(count*3);
-  const normalWorld=new Float32Array(count*3),visible=new Float32Array(count),damageBefore=new Float32Array(count);
-  const docking=new Uint8Array(count);
-  const radius=new Float32Array(count),mass=new Float32Array(count),tint=new Float32Array(count),noise=new Float32Array(count*3);
-  const renderData=new Float32Array(count*12),recovery=new Float32Array(5),zoneTotal=new Float32Array(5),zoneOut=new Float32Array(5);
-  const gridSize=16384,heads=new Int32Array(gridSize),next=new Int32Array(count),cx=new Int32Array(count),cy=new Int32Array(count),cz=new Int32Array(count);
-  const cellSize=.105,hash=(x,y,z)=>((x*73856093)^(y*19349663)^(z*83492791))&(gridSize-1);
+  const targetVelocity=new Float32Array(count*3),normalWorld=new Float32Array(count*3),visible=new Float32Array(count);
+  const radius=new Float32Array(count),tint=new Float32Array(count),noise=new Float32Array(count*3);
+  const returning=new Uint8Array(count);
+  const renderData=new Float32Array(count*12),cuts=new Float32Array(24*4),scars=[];
   let accumulator=0,initialized=false,liveCount=0;
-  const fixedStep=1/60;
+  const fixedStep=1/120;
   for(let index=0;index<count;index++) {
     const a=random()*TAU;let b;
     do{b=random()*TAU;}while(random()>Math.hypot(.22*Math.sin(b),.38*Math.cos(b))/.38);
@@ -108,7 +114,7 @@ export function createParticleSimulation({count=22000,maxActive=4500,seed=72819}
     const nx=c*Math.cos(b)/.22-s*Math.sin(b)/.38,ny=s*Math.cos(b)/.22+c*Math.sin(b)/.38;
     const normalLength=Math.hypot(nx,ny);
     normals[offset]=nx*Math.cos(a)/normalLength;normals[offset+1]=ny/normalLength;normals[offset+2]=nx*Math.sin(a)/normalLength;
-    radius[index]=.004+Math.pow(random(),2)*.010;mass[index]=.75+random()*.9;tint[index]=random();
+    radius[index]=.010+Math.pow(random(),1.5)*.021;tint[index]=random();
     noise[offset]=random()*2-1;noise[offset+1]=random()*2-1;noise[offset+2]=random()*2-1;
   }
 
@@ -131,151 +137,101 @@ export function createParticleSimulation({count=22000,maxActive=4500,seed=72819}
     }
   }
 
-  function seedDamage(pose,core,touches,impacts,pointer,dt) {
-    let activeCount=0;for(let i=0;i<count;i++)if(active[i])activeCount++;
-    for(let index=0;index<count;index++) {
-      const o=index*3,tx=targets[o],ty=targets[o+1],tz=targets[o+2];
-      const projection=2.4*pose.zoom/(1.8*(pose.cameraZ-tz));
-      const sx=tx*projection+pose.centerX,sy=(ty-pose.cameraY)*projection+pose.centerY;
-      const viewLength=Math.hypot(tx,pose.cameraY-ty,pose.cameraZ-tz);
-      const facing=(-tx*normalWorld[o]+(pose.cameraY-ty)*normalWorld[o+1]+(pose.cameraZ-tz)*normalWorld[o+2])/viewLength;
-      let damage=0,impact=0;
-      for(let zone=0;zone<5;zone++) {
-        const z=zone*4,r=touches[z+3];if(r<=0)continue;
-        const dx=sx-touches[z],dy=sy-touches[z+1];if(Math.abs(dx)>r||Math.abs(dy)>r)continue;
-        const distance=Math.hypot(dx,dy);if(distance>r)continue;
-        const weight=1-smooth(r*.22,r,distance);
-        damage=Math.max(damage,touches[z+2]*weight);impact=Math.max(impact,impacts[zone]*weight);
-      }
-      if(core.hit&&core.strength>.01){
-        const distance=Math.hypot(tx-core.center[0],ty-core.center[1],tz-core.center[2]);
-        damage=Math.max(damage,(1-smooth(core.radius*.8,core.radius*1.7,distance))*core.strength);
-      }
-      if(!active[index]&&activeCount<maxActive&&damage>.10+tint[index]*.08&&facing>.08&&sculptureDistance(tx,ty,tz,pose)>-.035) {
-        active[index]=1;visible[index]=0;
-        activeCount++;
-        const kick=(.25+impact*2.2)*(.65+tint[index]*.7);
-        velocities[o]=targetVelocity[o]+normalWorld[o]*kick+(pointer.velocityX||0)*impact*1.5+noise[o]*.12;
-        velocities[o+1]=targetVelocity[o+1]+normalWorld[o+1]*kick+(pointer.velocityY||0)*impact*1.5+noise[o+1]*.12;
-        velocities[o+2]=targetVelocity[o+2]+normalWorld[o+2]*kick+noise[o+2]*.16;
-      }else if(active[index]&&damage>damageBefore[index]+.24&&impact>.2){
-        velocities[o]+=normalWorld[o]*impact*.5;velocities[o+1]+=normalWorld[o+1]*impact*.5;velocities[o+2]+=normalWorld[o+2]*impact*.5;
-      }
-      damageBefore[index]=damage;
-      if(active[index]&&(damage>.08||Math.hypot(positions[o]-tx,positions[o+1]-ty,positions[o+2]-tz)>.012||Math.hypot(velocities[o]-targetVelocity[o],velocities[o+1]-targetVelocity[o+1],velocities[o+2]-targetVelocity[o+2])>.06))visible[index]+=(1-visible[index])*(1-Math.exp(-dt*32));
-    }
-  }
 
-  function contacts() {
-    heads.fill(-1);
-    for(let i=0;i<count;i++)if(active[i]){
-      const o=i*3;cx[i]=Math.floor(positions[o]/cellSize);cy[i]=Math.floor(positions[o+1]/cellSize);cz[i]=Math.floor(positions[o+2]/cellSize);
-      const h=hash(cx[i],cy[i],cz[i]);next[i]=heads[h];heads[h]=i;
-    }
-    for(let i=0;i<count;i++)if(active[i]){
-      const o=i*3;let neighbors=0;
-      for(let x=-1;x<=1&&neighbors<8;x++)for(let y=-1;y<=1&&neighbors<8;y++)for(let z=-1;z<=1&&neighbors<8;z++){
-        const gx=cx[i]+x,gy=cy[i]+y,gz=cz[i]+z;
-        for(let j=heads[hash(gx,gy,gz)];j>=0&&neighbors<8;j=next[j]){
-          if(j<=i||cx[j]!==gx||cy[j]!==gy||cz[j]!==gz)continue;
-          // Droplets close to their anchors merge into the solid instead of
-          // remaining separated forever by overlapping point-sample radii.
-          if(docking[i]&&docking[j])continue;
-          const q=j*3,dx=positions[o]-positions[q],dy=positions[o+1]-positions[q+1],dz=positions[o+2]-positions[q+2];
-          const distance=Math.hypot(dx,dy,dz);if(distance>=cellSize||distance<1e-7)continue;neighbors++;
-          const weight=1-distance/cellSize;
-          // Local viscosity exchanges velocity; the small cohesive term makes
-          // neighboring droplets travel together without prescribing a path.
-          for(let axis=0;axis<3;axis++){
-            const exchange=(velocities[q+axis]-velocities[o+axis])*weight*.035;
-            velocities[o+axis]+=exchange;velocities[q+axis]-=exchange;
-          }
-          const contactRadius=radius[i]+radius[j];
-          if(distance<contactRadius){
-            const nx=dx/distance,ny=dy/distance,nz=dz/distance;
-            const correction=(contactRadius-distance)*.48;
-            positions[o]+=nx*correction;positions[o+1]+=ny*correction;positions[o+2]+=nz*correction;
-            positions[q]-=nx*correction;positions[q+1]-=ny*correction;positions[q+2]-=nz*correction;
-            const relative=(velocities[o]-velocities[q])*nx+(velocities[o+1]-velocities[q+1])*ny+(velocities[o+2]-velocities[q+2])*nz;
-            if(relative<0){const impulse=-relative*1.25/(1/mass[i]+1/mass[j]);
-              velocities[o]+=nx*impulse/mass[i];velocities[o+1]+=ny*impulse/mass[i];velocities[o+2]+=nz*impulse/mass[i];
-              velocities[q]-=nx*impulse/mass[j];velocities[q+1]-=ny*impulse/mass[j];velocities[q+2]-=nz*impulse/mass[j];
-            }
-          }else{
-            const cohesion=weight*.0008;velocities[o]-=dx*cohesion;velocities[o+1]-=dy*cohesion;velocities[o+2]-=dz*cohesion;
-            velocities[q]+=dx*cohesion;velocities[q+1]+=dy*cohesion;velocities[q+2]+=dz*cohesion;
-          }
-        }
+  function fracture(pose,contacts,pointer,core) {
+    let activeCount=0;for(let i=0;i<count;i++)if(active[i])activeCount++;
+    for(const contact of contacts) {
+      if(!contact.hit||contact.strength<.5)continue;
+      const impact=clamp(contact.impact||0,0,1),reach=contact.radius*(1.2+impact*.8);
+      const m=pose.matrix,c=contact.center;
+      const local=[m[0]*c[0]+m[3]*c[1]+m[6]*c[2],m[1]*c[0]+m[4]*c[1]+m[7]*c[2],m[2]*c[0]+m[5]*c[1]+m[8]*c[2]];
+      let scar=scars.find(s=>Math.hypot(s.x-local[0],s.y-local[1],s.z-local[2])<reach*.55);
+      if(scar){scar.age=0;scar.radius=Math.max(scar.radius,reach);}
+      else {scars.unshift({x:local[0],y:local[1],z:local[2],radius:reach,age:0});if(scars.length>24)scars.pop();}
+      for(let i=0;i<count&&activeCount<maxActive;i++) {
+        if(active[i])continue;
+        const o=i*3,dx=targets[o]-c[0],dy=targets[o+1]-c[1],dz=targets[o+2]-c[2];
+        const distance=Math.hypot(dx,dy,dz);if(distance>reach*1.12)continue;
+        const facing=normalWorld[o]*(0-targets[o])+normalWorld[o+1]*(pose.cameraY-targets[o+1])+normalWorld[o+2]*(pose.cameraZ-targets[o+2]);
+        if(facing<.03||sculptureDistance(targets[o],targets[o+1],targets[o+2],pose)<-.025)continue;
+        active[i]=1;visible[i]=1;returning[i]=0;activeCount++;
+        // Ejection clears the cut, with angular momentum in an inclined plane.
+        const gx=targets[o]-core.center[0],gy=targets[o+1]-core.center[1],gz=targets[o+2]-core.center[2];
+        const r=Math.max(Math.hypot(gx,gy,gz),core.radius*1.3);
+        // A slightly inclined orbital plane gives real front/back depth.
+        const inclination=.18+noise[o+2]*.28;
+        let tx=-gy+gz*inclination,ty=gx,tz=-gx*inclination;
+        const tangentLength=Math.max(.001,Math.hypot(tx,ty,tz));
+        const sign=(pointer.velocityX||1)>=0?1:-1;
+        const orbitalSpeed=Math.sqrt(.48*r*r/Math.pow(r*r+.01,1.5));
+        const normalKick=.13+impact*.32;
+        velocities[o]=targetVelocity[o]*.2+normalWorld[o]*normalKick+tx/tangentLength*orbitalSpeed*sign+(pointer.velocityX||0)*impact*.2;
+        velocities[o+1]=targetVelocity[o+1]*.2+normalWorld[o+1]*normalKick+ty/tangentLength*orbitalSpeed*sign+(pointer.velocityY||0)*impact*.2;
+        velocities[o+2]=targetVelocity[o+2]*.2+normalWorld[o+2]*normalKick+tz/tangentLength*orbitalSpeed*sign;
+        const speed=Math.hypot(velocities[o],velocities[o+1],velocities[o+2]);
+        const escape=Math.sqrt(.96/Math.sqrt(r*r+.01))*.88;
+        if(speed>escape)for(let axis=0;axis<3;axis++)velocities[o+axis]*=escape/speed;
+
       }
     }
   }
 
   function integrate(core,dt) {
+    for(let i=scars.length-1;i>=0;i--){
+      const scar=scars[i];scar.age+=dt;
+      if(core.strength<.05&&scar.age>2.5)scar.radius*=Math.exp(-dt*2.4);
+      if(scar.radius<.002)scars.splice(i,1);
+    }
     for(let i=0;i<count;i++)if(active[i]){
-      const o=i*3,dx=positions[o]-core.center[0],dy=positions[o+1]-core.center[1],dz=positions[o+2]-core.center[2];
-      const distance=Math.max(.0001,Math.hypot(dx,dy,dz));
-      const near=core.strength*Math.max(0,1-distance/Math.max(core.radius*3.2,.001));
-      const spring=near>.05?12+12*tint[i]:38+16*tint[i],damping=near>.05?3.8+mass[i]:7+mass[i];
-      const repel=near*near*11;
-      const tx=-dy/distance,ty=dx/distance;
-      const turbulence=.3*near;
-      for(let axis=0;axis<3;axis++){
-        noise[o+axis]+=(random()*2-1-noise[o+axis])*dt*4;
-        const normalComponent=axis===0?dx/distance:axis===1?dy/distance:dz/distance;
-        const tangent=axis===0?tx:axis===1?ty:.1;
-        const force=(targets[o+axis]-positions[o+axis])*spring-(velocities[o+axis]-targetVelocity[o+axis])*damping+normalComponent*repel+tangent*near*1.7+noise[o+axis]*turbulence;
-        velocities[o+axis]+=force/mass[i]*dt;
+      const o=i*3;
+      if(core.strength<.05)returning[i]=1;
+      const dx=targets[o]-positions[o],dy=targets[o+1]-positions[o+1],dz=targets[o+2]-positions[o+2];
+      const separation=Math.hypot(dx,dy,dz);
+      if(returning[i]){
+        // Reconstruction is a separate capture phase, never a liquid force.
+        for(let a=0;a<3;a++)velocities[o+a]+=((targets[o+a]-positions[o+a])*24-(velocities[o+a]-targetVelocity[o+a])*9)*dt;
+      }else{
+        const gx=core.center[0]-positions[o],gy=core.center[1]-positions[o+1],gz=core.center[2]-positions[o+2];
+        const denominator=Math.pow(gx*gx+gy*gy+gz*gz+.01,1.5);
+        for(let a=0;a<3;a++)velocities[o+a]+=.48*(a===0?gx:a===1?gy:gz)/denominator*dt;
       }
-      const speed=Math.hypot(velocities[o],velocities[o+1],velocities[o+2]);
-      if(speed>7)for(let axis=0;axis<3;axis++)velocities[o+axis]*=7/speed;
-      for(let axis=0;axis<3;axis++)positions[o+axis]+=velocities[o+axis]*dt;
-      if(core.strength>.05)resolveSphereContact(positions,velocities,o,core.center,core.velocity,core.radius*Math.sqrt(core.strength)+radius[i],.45+tint[i]*.25);
-      const separation=Math.hypot(positions[o]-targets[o],positions[o+1]-targets[o+1],positions[o+2]-targets[o+2]);
-      docking[i]=near<.01&&separation<.035&&damageBefore[i]<.08?1:0;
-      const relativeSpeed=Math.hypot(velocities[o]-targetVelocity[o],velocities[o+1]-targetVelocity[o+1],velocities[o+2]-targetVelocity[o+2]);
-      if(near<.01&&separation<.008&&relativeSpeed<.045&&damageBefore[i]<.08){
-        visible[i]*=Math.exp(-dt*20);
-        if(visible[i]<.015){active[i]=0;visible[i]=0;for(let axis=0;axis<3;axis++){positions[o+axis]=targets[o+axis];velocities[o+axis]=targetVelocity[o+axis];}}
+      for(let a=0;a<3;a++)positions[o+a]+=velocities[o+a]*dt;
+      if(core.strength>.05)resolveSphereContact(positions,velocities,o,core.center,core.velocity,core.radius+radius[i]*.7,.78);
+      if(returning[i]&&separation<.015&&Math.hypot(velocities[o]-targetVelocity[o],velocities[o+1]-targetVelocity[o+1],velocities[o+2]-targetVelocity[o+2])<.10){
+        active[i]=0;visible[i]=0;for(let a=0;a<3;a++){positions[o+a]=targets[o+a];velocities[o+a]=targetVelocity[o+a];}
       }
     }
-    contacts();
-    // Pair contacts can push a droplet toward the core; constrain it again.
-    if(core.strength>.05)for(let i=0;i<count;i++)if(active[i])resolveSphereContact(positions,velocities,i*3,core.center,core.velocity,core.radius*Math.sqrt(core.strength)+radius[i],.45+tint[i]*.25);
   }
 
-  function pack(pose,touches) {
-    recovery.fill(0);zoneTotal.fill(0);zoneOut.fill(0);let drawCount=0;liveCount=0;
-    for(let i=0;i<count;i++){
-      const o=i*3,projection=2.4*pose.zoom/(1.8*(pose.cameraZ-targets[o+2]));
-      const sx=targets[o]*projection+pose.centerX,sy=(targets[o+1]-pose.cameraY)*projection+pose.centerY;
-      const separation=active[i]?Math.hypot(positions[o]-targets[o],positions[o+1]-targets[o+1],positions[o+2]-targets[o+2]):0;
-      for(let zone=0;zone<5;zone++){
-        const z=zone*4,r=touches[z+3];if(r<=0)continue;
-        const dx=sx-touches[z],dy=sy-touches[z+1];if(Math.abs(dx)>r||Math.abs(dy)>r)continue;
-        const distance=Math.hypot(dx,dy);if(distance>r)continue;
-        const weight=1-smooth(r*.22,r,distance);zoneTotal[zone]+=weight;zoneOut[zone]+=weight*clamp(separation/.16,0,1);
-      }
-      if(active[i])liveCount++;
-      if(!active[i]||visible[i]<.01)continue;
-      const d=drawCount++*12;
+  function pack(core) {
+    let drawCount=0;liveCount=0;
+    for(let i=0;i<count;i++)if(active[i]) {
+      liveCount++;const o=i*3,d=drawCount++*12;
       renderData[d]=positions[o];renderData[d+1]=positions[o+1];renderData[d+2]=positions[o+2];renderData[d+3]=visible[i];
       renderData[d+4]=velocities[o];renderData[d+5]=velocities[o+1];renderData[d+6]=velocities[o+2];renderData[d+7]=radius[i];
       renderData[d+8]=targets[o];renderData[d+9]=targets[o+1];renderData[d+10]=targets[o+2];renderData[d+11]=tint[i];
     }
-    for(let zone=0;zone<5;zone++)recovery[zone]=zoneTotal[zone]>0?clamp(zoneOut[zone]/zoneTotal[zone]*1.15,0,.95):0;
+    cuts.fill(0);
+    for(let i=scars.length-1;i>=0;i--){
+      const scar=scars[i];
+      // The crater is attached to the solid and holds its hard edge while orbiting.
+
+      cuts.set([scar.x,scar.y,scar.z,scar.radius],i*4);
+    }
     return drawCount;
   }
 
-  return {positions,velocities,targets,active,visible,renderData,recovery,count,
-    get hasActive(){return liveCount>0;},
-    update({dt,pose,core,touches,impacts,pointer={},moving=true}) {
-      if(!moving&&initialized)return pack(pose,touches);
+  return {positions,velocities,targets,active,visible,renderData,cuts,count,
+    get hasActive(){return liveCount>0||scars.length>0;},
+    get cutCount(){return scars.length;},
+    update({dt,pose,core,contacts=[],pointer={},moving=true}) {
+      if(!moving&&initialized)return pack(core);
       updateTargets(pose,dt);initialized=true;
-      if(moving){seedDamage(pose,core,touches,impacts,pointer,Math.min(dt,.05));accumulator+=Math.min(dt,.05);
-        while(accumulator>=fixedStep){integrate(core,fixedStep);accumulator-=fixedStep;}
-      }
-      return pack(pose,touches);
+      fracture(pose,contacts,pointer,core);
+      accumulator+=Math.min(dt,.05);
+      while(accumulator+1e-10>=fixedStep){integrate(core,fixedStep);accumulator-=fixedStep;}
+      return pack(core);
     },
-    reset(){active.fill(0);docking.fill(0);visible.fill(0);velocities.fill(0);targetVelocity.fill(0);damageBefore.fill(0);recovery.fill(0);accumulator=0;initialized=false;liveCount=0;}
+    reset(){active.fill(0);visible.fill(0);velocities.fill(0);targetVelocity.fill(0);returning.fill(0);cuts.fill(0);scars.length=0;accumulator=0;initialized=false;liveCount=0;}
   };
 }
