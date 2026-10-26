@@ -1,31 +1,30 @@
-// Three concentric, depth-tested cylinders. The particles and the camera are unchanged.
-export const energyVertex=`
-uniform float uTime,uThicknessWave;
-out vec3 vNormal,vView;out float vAxial,vAngle;
-float profile(float y){float tip=pow(max(0.,sin(clamp(y,0.,1.)*3.14159265)),.28);float wave=.55*sin(y*19.-uTime*.58)+.45*sin(y*41.+uTime*.37);return tip*(1.+uThicknessWave*wave);}
-void main(){
- vAxial=uv.y;vAngle=atan(position.z,position.x);float width=profile(vAxial),slope=(profile(min(1.,vAxial+.001))-profile(max(0.,vAxial-.001)))/.002;
- vec3 p=position;p.xz*=width;vec3 n=abs(normal.y)>.5?normal:normalize(vec3(normal.x,-slope,normal.z));
- vec4 view=modelViewMatrix*vec4(p,1.);vView=view.xyz;vNormal=normalize(normalMatrix*n);gl_Position=projectionMatrix*view;
-}`;
-export const energyFragment=`
-in vec3 vNormal,vView;in float vAxial,vAngle;
-uniform vec3 uColor,uCoreColor;uniform float uStrength,uPulse,uCoreStart,uTime,uLayer,uFresnel,uNoiseSpeed,uNoiseScale,uPulseIntensity,uEnvelopeOpacity;
+// Analytic radiance, not a shaded surface. The invisible cylinder is a separate depth-only mesh.
+export const lightVertex=`void main(){gl_Position=vec4(position.xy,0.,1.);}`;
+export const lightFragment=`
+precision highp float;
+uniform mat4 uInverseProjection;uniform vec2 uResolution;uniform vec3 uA,uB,uColor,uCoreColor;
+uniform float uRadius,uStrength,uTime,uCoreWidth,uHdr,uGlowWidth,uMist,uTipFade,uVariant;
 out vec4 outColor;
-float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.)),f.x),f.y);}
-float fbm(vec2 p){return noise(p)*.57+noise(p*2.03+4.7)*.28+noise(p*4.11-2.1)*.15;}
 void main(){
- float tip=smoothstep(0.,.065,vAxial)*(1.-smoothstep(.935,1.,vAxial));if(tip<.008)discard;
- float facing=clamp(abs(dot(normalize(vNormal),normalize(-vView))),0.,1.),fresnel=pow(1.-facing,2.4);
- float clock=uTime*uNoiseSpeed,n=fbm(vec2(vAngle*1.7+sin(vAxial*8.-clock)*.25,vAxial*uNoiseScale-clock));
- float current=pow(.5+.5*sin(vAxial*43.-clock*4.+n*7.+vAngle*2.),5.);
- float pulse=1.+uPulseIntensity*(.5*sin(uPulse)+.3*sin(uPulse*1.618+.7)+.2*sin(uPulse*.47+2.));
- float spark=exp(-pow((min(vAxial,1.-vAxial)-.035)/.026,2.));
- if(uLayer<.5){outColor=vec4(uCoreColor*uStrength*(.94+.06*n)*pulse,tip);return;}
- vec3 roundBody=uColor*(.46+.54*facing),energy=uColor*(.20*n+.30*current+uFresnel*fresnel*.70+spark*.52);
- float hot=pow(facing,clamp(14.+(uCoreStart-.85)*133.333,8.,40.));vec3 light=mix(roundBody+energy,uCoreColor*(.96+.10*current),hot*.92)*uStrength*pulse;
- float alpha=mix(.96,.42,fresnel)*tip;
- if(uLayer>1.5){light=uColor*(.75+.45*n+spark*.65)*uStrength;alpha=uEnvelopeOpacity*(.25+.75*fresnel)*tip*(.7+.3*n);}
- outColor=vec4(light,alpha);
+ if(uVariant>.5)discard;
+ vec2 ndc=gl_FragCoord.xy/uResolution*2.-1.;vec4 q=uInverseProjection*vec4(ndc,1.,1.);vec3 ray=normalize(q.xyz/q.w),axis=uB-uA;
+ float length2=dot(axis,axis),dr=dot(ray,axis),ar=dot(ray,uA),as=dot(axis,uA),den=max(.000001,length2-dr*dr);
+ float along=clamp((dr*ar-as)/den,0.,1.);vec3 center=uA+axis*along;float travel=max(.001,dot(center,ray)),distance=length(ray*travel-center);
+ float width=max(.00001,uRadius);if(distance>width*45.)discard;
+ float endFade=smoothstep(0.,uTipFade,along)*(1.-smoothstep(1.-uTipFade,1.,along));
+ float organic=1.+.017*sin(dot(center,vec3(1.7,3.1,2.3))+uTime*.19)+.012*sin(uTime*.31+center.y*5.1);
+ float core=exp(-pow(distance/(width*uCoreWidth),1.3))*uHdr;
+ float glow=exp(-distance/(width*uGlowWidth))*.16,brume=exp(-distance/(width*10.))*uMist;
+ float coverage=clamp(core+glow+brume,0.,1.)*endFade*uStrength;if(coverage<.0004)discard;
+ vec3 emission=(uCoreColor*core+uColor*(glow+brume))*organic;
+ outColor=vec4(emission/max(.0001,clamp(core+glow+brume,0.,1.)),clamp(coverage,0.,1.));
+}`;
+export const singularityFragment=`
+precision highp float;uniform vec2 uResolution;uniform float uProgress,uTime,uFlash,uActive;uniform vec4 uPhases;uniform vec3 uHotA,uHotB;out vec4 outColor;
+void main(){if(uActive<.5||uProgress>=uPhases.y)discard;vec2 p=(gl_FragCoord.xy-uResolution*.5)/uResolution.y;float r=length(p),pulse=1.+.035*sin(uTime*1.1);
+ float singular=1.-smoothstep(uPhases.x,uPhases.x+.04,uProgress),core=exp(-pow(r/.0018,1.2))*4.*singular*pulse,halo=exp(-r/.013)*.055*singular;
+ float b=clamp((uProgress-uPhases.x)/max(.01,uPhases.y-uPhases.x),0.,1.),flash=exp(-pow((b-.18)/.12,2.))*uFlash*step(uPhases.x,uProgress);
+ float wave=exp(-abs(r-(1.-pow(1.-b,3.))*.9)*130.)*(1.-smoothstep(.6,1.,b))*.45*step(uPhases.x,uProgress);
+ float alpha=clamp(core+halo+flash*exp(-r*7.)+wave,0.,1.);if(alpha<.0005)discard;
+ vec3 color=vec3(core+halo)+mix(uHotA,uHotB,.5)*(flash*exp(-r*7.)+wave);outColor=vec4(color/max(.001,alpha),alpha);
 }`;

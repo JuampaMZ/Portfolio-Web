@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PARTICLE_CONFIG as config} from '../js/particle-config.js';
 import {beamPose,bandBasis,interlockGeometry,interlockedRings,ringTubeScale} from '../js/particle-motion.js';
-import {isMobileSensorDevice,relativeTilt,tiltOffset,createDeviceTilt} from '../js/particle-orientation.js';
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0),distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 
 test('hourglass cycle closes smoothly, pivots in depth, and respects its angle bound',()=>{
@@ -26,10 +25,10 @@ test('the beam pivot remains stable and its axis bisects the two nominal perpend
   const sum=normals[0].map((v,i)=>(v+normals[1][i])/Math.SQRT2);assert.ok(distance(sum,pose.direction)<1e-6);
  }finally{Object.assign(config,previous);}
 });
-test('both thick C tubes retain clearance across hourglass motion, independent lag, wobble and mobile tilt',()=>{
+test('both thick C tubes retain clearance across hourglass motion, independent lag and bounded wobble',()=>{
  let independent=false;
  for(let step=0;step<=72;step++){
-  const time=step/72*config.beamCycleSeconds,{pose,geometry:g,frames}=interlockedRings(time,[Math.sin(time*.1),Math.cos(time*.13)]);
+  const time=step/72*config.beamCycleSeconds,{pose,geometry:g,frames}=interlockedRings(time);
   const points=frames.map((frame,index)=>{
    const u=[...frame.basis.slice(0,3)],n=[...frame.basis.slice(3,6)],v=[...frame.basis.slice(6,9)];
    assert.ok(Math.abs(dot(u,n))<1e-6&&Math.abs(dot(v,n))<1e-6);
@@ -49,38 +48,6 @@ test('local necks retain clearance at narrow openings and limit excessive tube a
   assert.ok(g.thickness<=radius*.32);assert.ok(g.height<=radius*.32);
   assert.ok((1-2*g.clearanceFraction)*g.nearest-2*g.breath-2*(radius+g.tube+g.breath)*Math.sin(g.maxRotation)>=g.margin-1e-8);
  }
-});
-
-test('sensor detection excludes desktop and orientation is relative, clamped and depth ordered',()=>{
- assert.equal(isMobileSensorDevice({userAgent:'Windows Chrome',maxTouchPoints:10}),false);
- assert.equal(isMobileSensorDevice({userAgent:'iPhone Safari'}),true);assert.equal(isMobileSensorDevice({platform:'MacIntel',maxTouchPoints:5}),true);
- assert.deepEqual(relativeTilt(70,15,{beta:70,gamma:15}),[0,0]);
- const tilted=relativeTilt(80,25,{beta:70,gamma:15});assert.ok(tilted[0]>0&&tilted[1]<0);
- const front=tiltOffset([1,1],config.gyroFrontPixels,800),back=tiltOffset([1,1],config.gyroBackPixels,800);
- assert.ok(Math.hypot(...front)>Math.hypot(...back));assert.ok(Math.hypot(...tiltOffset([4,4],100,800))*800<=config.gyroMaxDisplacement+.001);
-});
-function event(target,type,props={}){target.dispatchEvent(Object.assign(new Event(type),props));}
-function environment(requestPermission,ua='iPhone Safari'){
- const win=new EventTarget();win.DeviceOrientationEvent=typeof requestPermission==='function'?{requestPermission}:{};win.screen={orientation:{angle:0}};
- return {win,nav:{userAgent:ua,userActivation:{isActive:true}},clock:0,now(){return this.clock;}};
-}
-test('iOS requests only on touch, establishes a holding baseline, smooths samples and cleans listeners',async()=>{
- let requests=0;const env=environment(()=>{requests++;return Promise.resolve('granted');}),sensor=createDeviceTilt({...env,now:()=>env.clock});
- try{
-  assert.equal(sensor.status,'awaiting-touch');assert.equal(requests,0);
-  event(env.win,'pointerup',{pointerType:'touch'});await Promise.resolve();await Promise.resolve();assert.equal(requests,1);
-  event(env.win,'deviceorientation',{beta:73,gamma:12});assert.deepEqual([...sensor.sample()],[0,0]);
-  event(env.win,'deviceorientation',{beta:83,gamma:22});env.clock=50;const first=[...sensor.sample()];assert.ok(first[0]>0&&first[0]<.5);
-  for(let i=0;i<30;i++){env.clock+=50;sensor.sample();}assert.ok(sensor.sample()[0]>.45);
-  event(env.win,'pointerup',{pointerType:'touch'});assert.equal(requests,1);sensor.dispose();event(env.win,'deviceorientation',{beta:0,gamma:0});assert.deepEqual([...sensor.sample()],[0,0]);
- }finally{sensor.dispose();}
-});
-test('denial, unavailable sensors, Android and desktop retain a safe non-sensor fallback',async()=>{
- let requests=0;const denied=environment(()=>{requests++;return Promise.resolve('denied');}),d=createDeviceTilt({...denied,now:()=>0});
- event(denied.win,'touchend');await Promise.resolve();await Promise.resolve();assert.equal(d.status,'denied');event(denied.win,'touchend');assert.equal(requests,1);assert.deepEqual([...d.sample()],[0,0]);d.dispose();
- const android=environment(null,'Android Chrome'),a=createDeviceTilt({...android,now:()=>0});event(android.win,'deviceorientation',{beta:60,gamma:4});assert.equal(a.status,'active');a.dispose();
- const desktop=environment(()=>{throw new Error('must not ask');},'Windows Chrome'),pc=createDeviceTilt({...desktop,now:()=>0});event(desktop.win,'touchend');assert.equal(pc.status,'desktop');pc.dispose();
- const absent=new EventTarget(),fallback=createDeviceTilt({win:absent,nav:{userAgent:'iPhone'},now:()=>0});assert.equal(fallback.status,'unsupported');fallback.dispose();
 });
 
 test('the C opening adjusts to the 40% wider bands and the necks preserve the volume away from both crossings',()=>{

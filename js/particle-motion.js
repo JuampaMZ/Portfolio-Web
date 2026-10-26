@@ -1,11 +1,10 @@
 import {PARTICLE_CONFIG as config} from './particle-config.js';
 export const normalize3=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n);};
-export function beamPose(time,tilt=[0,0],blend=1,extraAngle=0){
+export function beamPose(time,_unused=[0,0],blend=1,extraAngle=0){
  const phase=time*2*Math.PI/Math.max(1,config.beamCycleSeconds);
  const depthSlope=Math.tan(config.beamMaxAngle*Math.PI/180)*blend;
  const lateralSlope=Math.tan(Math.min(62,config.beamMaxAngle+Math.max(0,extraAngle))*Math.PI/180)*blend;
- const gyro=config.gyroMaxTilt*Math.PI/180/Math.max(1,Math.hypot(tilt[0],tilt[1]));
- const direction=normalize3([Math.sin(phase)*lateralSlope+tilt[0]*gyro,1,Math.cos(phase)*depthSlope+tilt[1]*gyro]);
+ const direction=normalize3([Math.sin(phase)*lateralSlope,1,Math.cos(phase)*depthSlope]);
  return {direction,depth:0};
 }
 export function bandBasis(direction){
@@ -37,12 +36,12 @@ function limitedRotation(vector,from,to,maxAngle){
  const angle=Math.min(maxAngle,Math.acos(clamp(dot(from,to),-1,1))),n=axis.map(v=>v/length),c=Math.cos(angle),s=Math.sin(angle),nv=dot(n,vector),turn=cross(n,vector);
  return vector.map((v,i)=>v*c+turn[i]*s+n[i]*nv*(1-c));
 }
-export function interlockedRings(time,tilt=[0,0],blend=1,extraAngle=0,rate=1){
- const geometry=interlockGeometry(),pose=beamPose(time,tilt,blend,extraAngle),basis=bandBasis(pose.direction);
+export function interlockedRings(time,_unused=[0,0],blend=1,extraAngle=0,rate=1,radiusScale=1){
+ const geometry=interlockGeometry({...config,bandRadius:config.bandRadius*radiusScale}),pose=beamPose(time,_unused,blend,extraAngle),basis=bandBasis(pose.direction);
  const x=[...basis.slice(0,3)],y=pose.direction,z=[...basis.slice(6,9)],yaw=config.ringOrientation*Math.PI/180;
  const u=x.map((v,i)=>v*Math.cos(yaw)-z[i]*Math.sin(yaw)),side=x.map((v,i)=>v*Math.sin(yaw)+z[i]*Math.cos(yaw));
  const frames=[config.ringLagA,config.ringLagB].map((lag,index)=>{
-  const delayed=beamPose(time-Math.max(0,lag)*rate,tilt,blend,extraAngle).direction,wobble=Math.min(3,Math.max(0,config.ringWobble))*Math.PI/180*blend;
+  const delayed=beamPose(time-Math.max(0,lag)*rate,_unused,blend,extraAngle).direction,wobble=Math.min(3,Math.max(0,config.ringWobble))*Math.PI/180*blend;
   const desired=normalize3(delayed.map((v,i)=>v+x[i]*Math.sin(time*.17*config.ringMotionSpeed+index*2.1)*wobble+z[i]*Math.sin(time*.13*config.ringMotionSpeed+index*1.7)*wobble*.7));
   const normal=normalize3(y.map((v,i)=>v+side[i]*(index===0?1:-1)));
   const vectors=[u,normal,cross(u,normal)].map(v=>limitedRotation(v,pose.direction,desired,geometry.maxRotation));

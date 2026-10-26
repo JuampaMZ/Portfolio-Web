@@ -1,0 +1,71 @@
+{
+  "viewport": [
+    390,
+    844
+  ],
+  "quality": "mobile-hdr",
+  "hdr": "true",
+  "variant": "B",
+  "particles": "3000",
+  "durationMs": 10401.599999976159,
+  "longTasks": [],
+  "longFrames": [],
+  "meanFrameMs": 16.642559999961854,
+  "phases": [
+    {
+      "t": 0.010299999976157779,
+      "phase": "singularity",
+      "progress": "0.00000",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 0.5431999999761574,
+      "phase": "explosion",
+      "progress": "0.10106",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 1.2760999999761589,
+      "phase": "expansion",
+      "progress": "0.30218",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 2.3583999999761582,
+      "phase": "absorption",
+      "progress": "0.60275",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 3.4408999999761583,
+      "phase": "formed",
+      "progress": "0.90347",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 5.755499999976158,
+      "phase": "absorption",
+      "progress": "0.89570",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 6.8380999999761585,
+      "phase": "expansion",
+      "progress": "0.59732",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 7.9203999999761585,
+      "phase": "explosion",
+      "progress": "0.29666",
+      "engine": "three-mesh-gpu"
+    },
+    {
+      "t": 8.636499999976156,
+      "phase": "singularity",
+      "progress": "0.09779",
+      "engine": "three-mesh-gpu"
+    }
+  ],
+  "finalProgress": "0.00000"
+}

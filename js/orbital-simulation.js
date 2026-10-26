@@ -1,3 +1,4 @@
+import {cosmicUniforms,cosmicSource} from './big-bang.js';
 import {gpuMath} from './particle-gpu.js';
 // Axial hourglass restored verbatim from 7b12045; rendering uses the new camera.
 export const orbitalSource=`
@@ -36,7 +37,7 @@ vec3 beamDustLocal(float id,float time){
  return vec3(cos(angle)*radius,axial*uDustLength*.5,sin(angle)*radius);
 }
 vec3 orbitalTarget(float id,float time){
- vec3 p;
+ if(inBeam(id))return beamPhoton(id,time);vec3 p;
  if(inBand(id)||inGap(id)){
   bool second=secondRing(id),gap=inGap(id);vec2 tube=bandTube(id);float phase=ringPhase(id,time);
   float angle=(second?3.14159265:0.)+(gap?-uGap*.5:uGap*.5)+phase*(gap?uGap:6.2831853-uGap);
@@ -62,28 +63,22 @@ vec3 nucleusPointer(vec3 p,float id){
 export const simulationVertex=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
-uniform float uTime,uDt,uReset,uSpring,uDamping,uAssemblyDelay,uAssemblySeconds,uAspect,uRecycleWindow;
+uniform float uTime,uDt,uReset,uSpring,uDamping,uAspect,uRecycleWindow;
 out vec3 nextPosition,nextVelocity;
-`+gpuMath+orbitalSource+`
+`+gpuMath+cosmicUniforms+orbitalSource+cosmicSource+`
 void main(){
  float id=float(gl_VertexID),seed=random(id+1.);
  vec3 target=orbitalTarget(id,uTime);
- float start=uAssemblyDelay+seed*.45,finish=uAssemblyDelay+uAssemblySeconds;
- if(uTime<finish){
-  vec3 dispersed=vec3((random(id+51.)-.5)*uAspect*2.4,(random(id+62.)-.5)*2.2,(random(id+71.)-.5)*1.2);
-  float t=clamp((uTime-start)/max(.1,finish-start),0.,1.);float ease=t*t*t*(t*(t*6.-15.)+10.);
-  float spiral=(1.-ease)*sin(t*3.14159265)*2.;
-  dispersed.xy=mat2(cos(spiral),-sin(spiral),sin(spiral),cos(spiral))*dispersed.xy;
-  nextPosition=mix(dispersed,target,ease);
-  // Carry the actual assembly velocity into the spring phase instead of stopping it at the seam.
-  nextVelocity=uReset>.5?vec3(0.):(nextPosition-aPosition)/max(.001,uDt);nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
- }// Recycle only while both tips are invisible; never integrate across the gap.
- else if(uReset>.5||((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5)){nextPosition=target;nextVelocity=vec3(0.);}
+ bool wrapped=inBeam(id)?abs(beamPhase(id,uTime)-beamPhase(id,uTime-uRecycleWindow))>.5:((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5);
+ if(uStoryActive>.5&&uBigBang<1.){
+  target=cosmicTarget(id,uBigBang,uVisualTime,target);float inertia=bangSmooth(uPhases.w,1.,uBigBang);
+  float spring=uSpring*mix(1.-uReturnSpread*.7,1.+uReturnSpread*.3,random(id+83.));vec3 force=(target-aPosition)*spring-aVelocity*uDamping+nucleusPointer(aPosition,id)*inertia;
+  vec3 v=aVelocity+force*uDt;v*=min(1.,4./max(length(v),.0001));nextPosition=uReset>.5?target:mix(target,aPosition+v*uDt,inertia);
+  nextVelocity=uReset>.5?vec3(0.):mix((nextPosition-aPosition)/max(.001,uDt),v,inertia);nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
+ }else if(uReset>.5||wrapped){nextPosition=target;nextVelocity=vec3(0.);}
  else{
   float spring=uSpring*mix(1.-uReturnSpread*.7,1.+uReturnSpread*.3,random(id+83.)),damping=uDamping*mix(.84,1.13,random(id+89.));
-  vec3 force=(target-aPosition)*spring+-aVelocity*damping+nucleusPointer(aPosition,id);
-  nextVelocity=aVelocity+force*uDt;nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
-  nextPosition=aPosition+nextVelocity*uDt;
+  vec3 force=(target-aPosition)*spring-aVelocity*damping+nucleusPointer(aPosition,id);nextVelocity=aVelocity+force*uDt;nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));nextPosition=aPosition+nextVelocity*uDt;
  }
  gl_Position=vec4(0.);
 }`;

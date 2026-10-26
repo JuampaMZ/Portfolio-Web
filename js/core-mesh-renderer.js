@@ -1,103 +1,98 @@
-import {energyVertex,energyFragment} from './energy-beam.js';
+import * as THREE from '../assets/three-runtime.js';
+import {lightVertex,lightFragment,singularityFragment} from './energy-beam.js';
 import {waitForGpu} from './gpu-ready.js';
 import {beamColors} from './beam-colors.js';
 import {sphereVertex,sphereFragment} from './particle-sphere.js';
 import {beamMeshPose} from './beam-mesh-pose.js';
 import {IS_DEVELOPMENT} from './environment.js';
-import * as THREE from '../assets/three-runtime.js';
 import {interlockedRings,bandBasis} from './particle-motion.js';
-import {PARTICLE_CONFIG as config,particleBudget,nucleusGroups,introState} from './particle-config.js';
+import {PARTICLE_CONFIG as config,nucleusGroups} from './particle-config.js';
+import {bigBangState,bangPhases,smooth} from './big-bang.js';
+import {gpuCapabilities,qualityProfile} from './render-quality.js';
 import {createGpuResources,emptyFragment} from './particle-gpu.js';
 import {createMeshGpuState} from './mesh-gpu-state.js';
 import {simulationVertex} from './orbital-simulation.js';
-import {tiltOffset} from './particle-orientation.js';
 
-export function createMeshCore(canvas,{singleRing=false,debug=false,inspection=false}={}){
- const settings=config;
- let renderer,resources,state,geometry,attribute,gui,disposed=false,count=0,width=0,height=0,dpr=1,reset=true,startTime=null,lastTime=null,fpsStart=0,fpsFrames=0;const attributes=new Map();
+export function createMeshCore(canvas,{singleRing=false,debug=false,inspection=false,quality={}}={}){
+ let renderer,resources,state,geometry,photonGeometry,gui,disposed=false,width=0,height=0,count=0,dpr=1,reset=true,startTime=null,lastTime=null,profile;
+ const attributes=new Map(),empty=new Float32Array(32),settings=config;let metadata={};
  try{
-  renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:false,premultipliedAlpha:true,powerPreference:'high-performance'});
-  const gl=renderer.getContext();renderer.setClearColor(0x000000,0);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NoToneMapping;renderer.toneMappingExposure=1.;
+  const gl=canvas.getContext('webgl2',{alpha:true,antialias:false,premultipliedAlpha:true,powerPreference:'high-performance'});if(!gl)return null;
+  const capabilities=gpuCapabilities(gl),device={coarse:matchMedia('(pointer:coarse)').matches,memory:navigator.deviceMemory||8,...quality};
+  profile=qualityProfile(capabilities,innerWidth,device,settings);if(profile.fallback)return null;
+  renderer=new THREE.WebGLRenderer({canvas,context:gl,alpha:true,antialias:false,premultipliedAlpha:true});
+  renderer.setClearColor(0x000000,0);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NoToneMapping;
   resources=createGpuResources(gl);
-  const names=['uPlacement','uCenter','uRingBasisA','uRingBasisB','uBeamBasis','uRingRadii','uGap','uFlowSpeed','uTipFade','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uBandRadius','uBandThickness','uBandHeight','uBandShear','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTurbulence','uTurbulenceSpeed','uTrail[0]','uRadius','uRepulsion','uCameraDistance','uCameraHalfHeight','uScreenCenter','uPointerDepth','uPointerSwirl','uReturnSpread'];
+  const names=['uPlacement','uCenter','uRingBasisA','uRingBasisB','uBeamBasis','uRingRadii','uGap','uFlowSpeed','uTipFade','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uBandRadius','uBandThickness','uBandHeight','uBandShear','uTime','uDt','uReset','uSpring','uDamping','uAspect','uRecycleWindow','uTurbulence','uTurbulenceSpeed','uTrail[0]','uRadius','uRepulsion','uCameraDistance','uCameraHalfHeight','uScreenCenter','uPointerDepth','uPointerSwirl','uReturnSpread','uBigBang','uStoryActive','uBangAttraction','uBeamCount','uCoreCount','uBeamLength','uBeamRadius','uBeamVariant','uVisualTime','uPhases','uHotA','uHotB'];
   const simulation=resources.program(simulationVertex,emptyFragment,names,true,true);
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(settings.cameraFov,1,.04,12);camera.position.z=settings.cameraDistance;camera.updateMatrixWorld();
   const uniforms=Object.fromEntries(names.map(name=>[name,{value:0}]));
   Object.assign(uniforms,{uSphereRadius:{value:settings.sphereRadius},uViewportHeight:{value:800},uDpr:{value:1},uLodPixels:{value:settings.sphereLodPixels},uDofStrength:{value:settings.sphereDof},uFocusRange:{value:settings.sphereFocusRange},uFocusDistance:{value:settings.cameraDistance},uDebug:{value:debug?1:0},uSingleRing:{value:singleRing?1:0},uRingOpacity:{value:settings.ringOpacity},uParticleColor:{value:new THREE.Color(settings.particleColor)},uDustColor:{value:new THREE.Color(settings.beamDustColor)},uBeamViewA:{value:new THREE.Vector3()},uBeamViewB:{value:new THREE.Vector3()},uProjection:{value:camera.projectionMatrix},uInverseProjection:{value:camera.projectionMatrixInverse},uResolution:{value:new THREE.Vector2()},uBeamLightColor:{value:new THREE.Color()},uDiffuse:{value:settings.sphereDiffuse},uAmbient:{value:settings.sphereAmbient},uSpecular:{value:settings.sphereSpecular},uShininess:{value:settings.sphereShininess},uRim:{value:settings.sphereRim},uRimPower:{value:settings.sphereRimPower},uActivityBrightness:{value:settings.ringActivityBrightness}});
   const material=new THREE.ShaderMaterial({glslVersion:THREE.GLSL3,vertexShader:sphereVertex,fragmentShader:sphereFragment,uniforms,toneMapped:false,transparent:true,blending:THREE.NormalBlending,depthTest:true,depthWrite:true});
-  const particles=new THREE.Points(new THREE.BufferGeometry(),material);particles.frustumCulled=false;scene.add(particles);
-  const beamGeometry=new THREE.CylinderGeometry(1,1,1,settings.beamSegments,settings.beamLengthSegments,false);
-  const makeBeamMaterial=layer=>new THREE.ShaderMaterial({glslVersion:THREE.GLSL3,vertexShader:energyVertex,fragmentShader:energyFragment,uniforms:{uColor:{value:new THREE.Color(settings.beamColor)},uCoreColor:{value:new THREE.Color(0xffffff)},uCoreStart:{value:settings.beamCoreStart},uStrength:{value:settings.beamStrength},uPulse:{value:0},uTime:{value:0},uLayer:{value:layer},uFresnel:{value:settings.beamFresnel},uNoiseSpeed:{value:settings.beamNoiseSpeed},uNoiseScale:{value:settings.beamNoiseScale},uThicknessWave:{value:settings.beamThicknessWave},uPulseIntensity:{value:settings.beamPulseIntensity},uEnvelopeOpacity:{value:settings.beamEnvelopeOpacity}},toneMapped:false,transparent:layer>0,depthWrite:layer<2,depthTest:true,blending:layer>0?THREE.NormalBlending:THREE.NoBlending});
-  const beamMaterial=makeBeamMaterial(1),coreMaterial=makeBeamMaterial(0),envelopeMaterial=makeBeamMaterial(2),beamMaterials=[beamMaterial,coreMaterial,envelopeMaterial];
-  const beam=new THREE.Mesh(beamGeometry,beamMaterial),hotCore=new THREE.Mesh(beamGeometry,coreMaterial),envelope=new THREE.Mesh(beamGeometry,envelopeMaterial);
-  beam.renderOrder=-1;envelope.renderOrder=1;hotCore.scale.set(settings.beamCoreRadius,1,settings.beamCoreRadius);envelope.scale.set(settings.beamEnvelopeRadius,1,settings.beamEnvelopeRadius);beam.add(hotCore,envelope);scene.add(beam);
-  const composer=new THREE.EffectComposer(renderer),renderPass=new THREE.RenderPass(scene,camera),bloom=new THREE.UnrealBloomPass(new THREE.Vector2(800,600),settings.bloomStrength,settings.bloomRadius,settings.bloomThreshold),output=new THREE.OutputPass();
-  composer.addPass(renderPass);composer.addPass(bloom);composer.addPass(output);
-  // Select chromatic beam light after depth resolution; keep white sphere highlights out of its halo.
-  bloom.compositeMaterial.uniforms.uGlowColor={value:new THREE.Color(settings.beamColor)};
-  bloom.compositeMaterial.fragmentShader=bloom.compositeMaterial.fragmentShader.replace('uniform float bloomStrength;','uniform float bloomStrength;uniform vec3 uGlowColor;').replace('float bloomAlpha =','bloom = uGlowColor * max(bloom.r,max(bloom.g,bloom.b));\nfloat bloomAlpha =');
-  bloom.materialHighPassFilter.uniforms.uChromaMin={value:settings.bloomChromaMin};
-  bloom.materialHighPassFilter.fragmentShader=bloom.materialHighPassFilter.fragmentShader.replace('uniform float smoothWidth;','uniform float smoothWidth;uniform float uChromaMin;').replace('float v = luminance( texel.xyz );','float chroma=max(texel.r,max(texel.g,texel.b))-min(texel.r,min(texel.g,texel.b));float v=luminance(texel.xyz)*smoothstep(uChromaMin,uChromaMin+.08,chroma);');
-  let groups={ring:0,gap:0,dust:0},placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),screenCenter=[0,0];const empty=new Float32Array(32);
-  let halfView=Math.tan(settings.cameraFov*Math.PI/360);
-  function values(age,trail){return {
-   uPlacement:placement,uCenter:center,uRingBasisA:rings.frames[0].basis,uRingBasisB:rings.frames[1].basis,uBeamBasis:bandBasis(rings.pose.direction),uRingRadii:[rings.frames[0].radius,rings.frames[1].radius],uGap:rings.geometry.gap,uFlowSpeed:settings.ringFlowSpeed,uTipFade:settings.ringTipFade,uRingCount:groups.ring,uGapCount:groups.gap,uGapOpacity:settings.gapOpacity,uNeckClearance:rings.geometry.clearanceFraction,uTubeBound:rings.geometry.tube,
-   uDustLength:settings.beamDustLength,uDustWaist:settings.beamDustWaist,uDustEndRadius:settings.beamDustEndRadius,uDustSpin:settings.beamDustSpin,uDustFlow:settings.beamDustFlow,uDustOpacity:settings.beamDustOpacity,
-   uBandRadius:rings.geometry.radius,uBandThickness:rings.geometry.thickness,uBandHeight:rings.geometry.height,uBandShear:settings.bandShear,uTime:age,uTurbulence:settings.turbulence,uTurbulenceSpeed:settings.turbulenceSpeed,uSpring:settings.spring,uDamping:settings.damping,uAssemblyDelay:settings.assemblyDelay,uAssemblySeconds:settings.assemblySeconds,uAspect:width/height,'uTrail[0]':trail,uRadius:settings.ringPointerRadius/height,uRepulsion:settings.ringPointerForce,uPointerDepth:settings.ringPointerDepth,uPointerSwirl:settings.ringPointerSwirl,uReturnSpread:settings.ringReturnSpread,uCameraDistance:settings.cameraDistance,uCameraHalfHeight:halfView,uScreenCenter:screenCenter};}
-  function simulationUniforms(data){gl.useProgram(simulation.program);for(const [name,value]of Object.entries(data)){const u=simulation.u[name];if(u===null)continue;if(typeof value==='number')gl.uniform1f(u,value);else if(value.length===9)gl.uniformMatrix3fv(u,false,value);else if(value.length===32)gl.uniform4fv(u,value);else gl['uniform'+value.length+'fv'](u,value);}}
-  function releaseGeometry(){if(!geometry)return;geometry.deleteAttribute('position');geometry.deleteAttribute('velocity');geometry.dispose();geometry=null;state?.dispose();state=null;attributes.clear();}
+  const photonMaterial=material.clone();photonMaterial.uniforms=uniforms;photonMaterial.depthWrite=false;
+  const particles=new THREE.Points(new THREE.BufferGeometry(),material),photons=new THREE.Points(new THREE.BufferGeometry(),photonMaterial);
+  particles.frustumCulled=photons.frustumCulled=false;photons.renderOrder=-30;scene.add(particles,photons);
+  const beamGeometry=new THREE.CylinderGeometry(1,1,1,48,24,false),beamMaterial=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:true,depthTest:true,transparent:true,blending:THREE.NoBlending});
+  const beam=new THREE.Mesh(beamGeometry,beamMaterial);beam.renderOrder=-20;scene.add(beam);
+  const plane=new THREE.BufferGeometry();plane.setAttribute('position',new THREE.Float32BufferAttribute([-1,-1,0,3,-1,0,-1,3,0],3));
+  const lightUniforms={uInverseProjection:{value:camera.projectionMatrixInverse},uResolution:{value:new THREE.Vector2()},uA:{value:new THREE.Vector3()},uB:{value:new THREE.Vector3()},uColor:{value:new THREE.Color()},uCoreColor:{value:new THREE.Color()},uRadius:{value:1},uStrength:{value:0},uTime:{value:0},uCoreWidth:{value:settings.beamCoreWidth},uHdr:{value:settings.beamHdrIntensity},uGlowWidth:{value:settings.beamGlowWidth},uMist:{value:settings.beamMist},uTipFade:{value:settings.beamTipFade},uVariant:{value:0}};
+  const lightMaterial=new THREE.ShaderMaterial({glslVersion:THREE.GLSL3,vertexShader:lightVertex,fragmentShader:lightFragment,uniforms:lightUniforms,transparent:true,depthWrite:false,depthTest:false,blending:THREE.NormalBlending,toneMapped:false});
+  const light=new THREE.Mesh(plane,lightMaterial);light.frustumCulled=false;light.renderOrder=-40;beam.add(light);
+  const cosmicUniforms={uResolution:{value:new THREE.Vector2()},uProgress:{value:1},uTime:{value:0},uFlash:{value:settings.bangFlashIntensity},uActive:{value:0},uPhases:{value:new THREE.Vector4(...bangPhases(settings))},uHotA:{value:new THREE.Color(settings.bangHotA)},uHotB:{value:new THREE.Color(settings.bangHotB)}};
+  const cosmicMaterial=new THREE.ShaderMaterial({glslVersion:THREE.GLSL3,vertexShader:lightVertex,fragmentShader:singularityFragment,uniforms:cosmicUniforms,transparent:true,depthWrite:false,depthTest:false,blending:THREE.NormalBlending,toneMapped:false});
+  const cosmicLight=new THREE.Mesh(plane,cosmicMaterial);cosmicLight.frustumCulled=false;cosmicLight.renderOrder=-50;scene.add(cosmicLight);
+  const target=new THREE.WebGLRenderTarget(1,1,{type:profile.hdr?THREE.HalfFloatType:THREE.UnsignedByteType,depthBuffer:true});
+  const composer=new THREE.EffectComposer(renderer,target),renderPass=new THREE.RenderPass(scene,camera),output=new THREE.OutputPass();composer.addPass(renderPass);
+  // RGBA8 stores premultiplied linear color. Convert straight color, then premultiply in sRGB.
+  if(!profile.hdr){output.material.fragmentShader=output.material.fragmentShader.replace('gl_FragColor = texture2D( tDiffuse, vUv );','gl_FragColor = texture2D( tDiffuse, vUv ); gl_FragColor.rgb /= max(.0001,gl_FragColor.a);').replace('gl_FragColor = sRGBTransferOETF( gl_FragColor );','gl_FragColor = sRGBTransferOETF( gl_FragColor ); gl_FragColor.rgb *= clamp(gl_FragColor.a,0.,1.);');}
+
+  const bloom=profile.hdr?new THREE.UnrealBloomPass(new THREE.Vector2(2,2),profile.bloomStrength,settings.bloomRadius,settings.bloomThreshold):null;
+  if(bloom){composer.addPass(bloom);bloom.compositeMaterial.uniforms.uGlowColor={value:new THREE.Color()};bloom.compositeMaterial.fragmentShader=bloom.compositeMaterial.fragmentShader.replace('uniform float bloomStrength;','uniform float bloomStrength;uniform vec3 uGlowColor;').replace('float bloomAlpha =','bloom = uGlowColor * max(bloom.r,max(bloom.g,bloom.b));\nfloat bloomAlpha =');}composer.addPass(output);
+  let groups={},placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),screenCenter=[0,0],halfView=Math.tan(settings.cameraFov*Math.PI/360),shape;
+  function releaseGeometry(){for(const g of [geometry,photonGeometry]){if(!g)continue;g.deleteAttribute('position');g.deleteAttribute('velocity');g.dispose();}geometry=photonGeometry=null;state?.dispose();state=null;attributes.clear();}
   function resize(w,h,force=false){
-   if(disposed||w<=0||h<=0)return;const coarse=matchMedia('(pointer:coarse)').matches,budget=particleBudget(w,{coarse,memory:navigator.deviceMemory||8});
-   const ratio=Math.min(devicePixelRatio||1,settings.maxDpr,Math.sqrt(settings.renderPixelBudget/(w*h)));
-   if(!force&&w===width&&h===height&&budget===count&&ratio===dpr)return;
-   width=w;height=h;count=budget;dpr=ratio;renderer.setPixelRatio(dpr);renderer.setSize(w,h,false);composer.setPixelRatio(dpr);composer.setSize(w,h);
-   const bloomScale=w<=700?settings.bloomMobileResolution:settings.bloomResolution;bloom.setSize(Math.round(canvas.width*bloomScale),Math.round(canvas.height*bloomScale));halfView=Math.tan(settings.cameraFov*Math.PI/360);camera.fov=settings.cameraFov;camera.position.z=settings.cameraDistance;camera.aspect=w/h;camera.updateProjectionMatrix();
+   if(disposed||w<1||h<1)return;const next=qualityProfile(capabilities,w,device,settings);if(next.fallback)return;
+   const ratio=Math.min(devicePixelRatio||1,next.maxDpr,Math.sqrt(next.pixelBudget/(w*h)),capabilities.maxSize/w,capabilities.maxSize/h),nextCount=next.coreCount+next.beamCount;
+   if(!force&&width===w&&height===h&&count===nextCount&&Math.abs(dpr-ratio)<.001)return;
+   width=w;height=h;profile=next;count=nextCount;dpr=ratio;renderer.setPixelRatio(dpr);renderer.setSize(w,h,false);composer.setPixelRatio(dpr);composer.setSize(w,h);
+   if(bloom)bloom.setSize(Math.max(2,Math.round(canvas.width*profile.bloomScale)),Math.max(2,Math.round(canvas.height*profile.bloomScale)));
+   halfView=Math.tan(settings.cameraFov*Math.PI/360);camera.fov=settings.cameraFov;camera.aspect=w/h;camera.position.z=settings.cameraDistance;camera.updateProjectionMatrix();
    releaseGeometry();renderer.resetState();state=createMeshGpuState(gl,count);renderer.resetState();
-   geometry=new THREE.BufferGeometry();geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(),10);attribute=new THREE.GLBufferAttribute(state.position,gl.FLOAT,3,4,count);geometry.setAttribute('position',attribute);geometry.setDrawRange(0,count);particles.geometry=geometry;
-   groups=singleRing?{ring:count,gap:0,dust:0}:nucleusGroups(count,w,{coarse},settings,interlockedRings(0).geometry.gap);reset=true;lastTime=null;
-   placement=new Float32Array([0,0,w<=700?Math.min(.52,w/h*1.04):.82,0]);
-   Object.assign(canvas.dataset,{particleEngine:'three-mesh-gpu',particleCount:String(count),ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),particleShape:'sphere-impostor',beamMaterial:'CylinderGeometry',camera:'PerspectiveCamera',fov:String(camera.fov),occlusion:'depth-buffer-normal-alpha',pixelRatio:dpr.toFixed(2),bloom:'postprocess-after-depth'});
+   geometry=new THREE.BufferGeometry();photonGeometry=new THREE.BufferGeometry();for(const g of [geometry,photonGeometry])g.boundingSphere=new THREE.Sphere(new THREE.Vector3(),10);
+   geometry.setDrawRange(0,profile.coreCount);photonGeometry.setDrawRange(profile.coreCount,profile.beamCount);particles.geometry=geometry;photons.geometry=photonGeometry;
+   groups=singleRing?{ring:profile.coreCount,gap:0,dust:0}:nucleusGroups(profile.coreCount,w,{coarse:profile.mobile},settings);groups.core=profile.coreCount;groups.beam=profile.beamCount;
+   placement=new Float32Array([0,0,profile.mobile?Math.min(.44,w/h*.78):.82,0]);reset=true;lastTime=null;
+   metadata={particleEngine:'three-mesh-gpu',particleCount:String(count),ringCount:String(groups.ring),beamDustCount:String(groups.dust),beamPhotonCount:String(groups.beam),particleShape:'sphere-impostor',beamMaterial:'depth-only-cylinder',camera:'PerspectiveCamera',fov:String(camera.fov),quality:profile.name,hdr:String(profile.hdr),pixelRatio:dpr.toFixed(2),sceneScale:String(placement[2]),occlusion:'depth-buffer-normal-alpha',bloom:bloom?'hdr-postprocess':'analytic-glow-rgba8'};Object.assign(canvas.dataset,metadata);
   }
-  function draw(time,progress=0,trail=empty,tilt=[0,0],drive=null){
+  function draw(time,progress=0,trail=empty,_unused=[0,0],drive=null){
    if(disposed||!state||gl.isContextLost())return;if(startTime===null)startTime=time;
    const age=time-startTime,elapsed=lastTime===null?0:Math.max(0,time-lastTime),dt=Math.min(1/30,elapsed);lastTime=time;
-   const shouldStep=reset||dt>0||age<settings.assemblyDelay+settings.assemblySeconds;
-   const offset=tiltOffset(tilt,settings.gyroCorePixels,height),mobile=width<=700;
-   screenCenter=singleRing?[0,0]:[(mobile?width/height*.02:width/height*.235)+offset[0],(mobile?.18:.055)+offset[1]];
+   const story=drive?.bigBang!==undefined,bang=bigBangState(story?drive.bigBang:1,settings),shift=story?smooth(bang.phases[3],1,bang.progress):1;
+   screenCenter=singleRing?[0,0]:[(profile.mobile?width/height*.02:width/height*.235)*shift,(profile.mobile?.18:.055)*shift];
    camera.setViewOffset(width,height,-screenCenter[0]*height,screenCenter[1]*height,width,height);camera.updateMatrixWorld();
-   const ramp=Math.max(0,Math.min(1,age/(settings.assemblyDelay+settings.assemblySeconds))),motion=ramp*ramp*(3-2*ramp);
-   rings=interlockedRings(drive?.phase??age,tilt,motion,drive?.extraAngle||0,drive?.rate||1);center=new Float32Array([0,0,rings.pose.depth]);
-   const data=values(age,trail);
-   if(shouldStep){simulationUniforms({...data,uDt:dt||1/60,uRecycleWindow:Math.max(1/60,Math.min(.2,elapsed))});
-    gl.uniform1f(simulation.u.uReset,reset?1:0);state.step();reset=false;renderer.resetState();
-   }
-   for(const [name,buffer]of [['position',state.position],['velocity',state.velocity]]){if(!attributes.has(buffer))attributes.set(buffer,new THREE.GLBufferAttribute(buffer,gl.FLOAT,3,4,count));geometry.setAttribute(name,attributes.get(buffer));}
-   for(const [name,value]of Object.entries(data)){if(uniforms[name])uniforms[name].value=value;}uniforms.uTrail={value:trail};
-   uniforms.uBeamBasis.value=new THREE.Matrix3().fromArray(data.uBeamBasis);uniforms.uRingBasisA.value=new THREE.Matrix3().fromArray(data.uRingBasisA);uniforms.uRingBasisB.value=new THREE.Matrix3().fromArray(data.uRingBasisB);
-   const colors=beamColors(age,settings);uniforms.uBeamLightColor.value.setRGB(...colors.body);uniforms.uDustColor.value.set(settings.beamDustColor);uniforms.uParticleColor.value.set(settings.particleColor);
-   for(const [name,value]of Object.entries({uSphereRadius:mobile?settings.sphereMobileRadius:settings.sphereRadius,uViewportHeight:canvas.height,uDpr:dpr,uLodPixels:mobile?settings.sphereMobileLodPixels:settings.sphereLodPixels,uDofStrength:mobile?settings.sphereMobileDof:settings.sphereDof,uFocusRange:settings.sphereFocusRange,uFocusDistance:settings.cameraDistance-rings.pose.depth,uRingOpacity:settings.ringOpacity,uDiffuse:settings.sphereDiffuse,uAmbient:settings.sphereAmbient,uSpecular:settings.sphereSpecular,uShininess:settings.sphereShininess,uRim:settings.sphereRim,uRimPower:settings.sphereRimPower,uActivityBrightness:settings.ringActivityBrightness}))uniforms[name].value=value;
-   uniforms.uResolution.value.set(canvas.width,canvas.height);beamMaterial.uniforms.uColor.value.setRGB(...colors.body);beamMaterial.uniforms.uCoreColor.value.setRGB(...colors.core);beamMaterial.uniforms.uCoreStart.value=settings.beamCoreStart;bloom.compositeMaterial.uniforms.uGlowColor.value.setRGB(...colors.glow);bloom.materialHighPassFilter.uniforms.uChromaMin.value=settings.bloomChromaMin;
-   const intro=introState(age),shape=beamMeshPose(rings.pose,placement[2],screenCenter,intro.beam,settings),radius=shape.radius;
-   beam.position.set(...shape.center);beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(...shape.direction));beam.scale.set(radius,shape.length,radius);beam.visible=intro.beam>.001;for(const m of beamMaterials){const u=m.uniforms;u.uColor.value.setRGB(...colors.body);u.uCoreColor.value.setRGB(...colors.core);for(const [key,value]of Object.entries({uStrength:settings.beamStrength*intro.beam,uTime:age,uPulse:age*settings.beamPulseSpeed,uFresnel:settings.beamFresnel,uNoiseSpeed:settings.beamNoiseSpeed,uNoiseScale:settings.beamNoiseScale,uThicknessWave:settings.beamThicknessWave,uPulseIntensity:settings.beamPulseIntensity,uEnvelopeOpacity:settings.beamEnvelopeOpacity}))u[key].value=value;}
-   hotCore.scale.set(settings.beamCoreRadius,1,settings.beamCoreRadius);envelope.scale.set(settings.beamEnvelopeRadius,1,settings.beamEnvelopeRadius);
+   rings=interlockedRings(drive?.phase??age,[0,0],1,drive?.extraAngle||0,drive?.rate||1,profile.ringScale);
+   shape=beamMeshPose(rings.pose,placement[2],screenCenter,1,{...settings,beamLength:settings.beamLength*profile.beamLengthScale});
+   const colors=beamColors(age,settings),hotA=new THREE.Color(settings.bangHotA),hotB=new THREE.Color(settings.bangHotB),orbitalTime=drive?.orbitTime??age;
+   const data={uPlacement:placement,uCenter:center,uRingBasisA:rings.frames[0].basis,uRingBasisB:rings.frames[1].basis,uBeamBasis:bandBasis(rings.pose.direction),uRingRadii:[rings.frames[0].radius,rings.frames[1].radius],uGap:rings.geometry.gap,uFlowSpeed:settings.ringFlowSpeed,uTipFade:settings.ringTipFade,uRingCount:groups.ring,uGapCount:groups.gap,uGapOpacity:settings.gapOpacity,uNeckClearance:rings.geometry.clearanceFraction,uTubeBound:rings.geometry.tube,uDustLength:settings.beamDustLength,uDustWaist:settings.beamDustWaist,uDustEndRadius:settings.beamDustEndRadius,uDustSpin:settings.beamDustSpin,uDustFlow:settings.beamDustFlow,uDustOpacity:settings.beamDustOpacity,uBandRadius:rings.geometry.radius,uBandThickness:rings.geometry.thickness,uBandHeight:rings.geometry.height,uBandShear:settings.bandShear,uTime:orbitalTime,uVisualTime:age,uTurbulence:settings.turbulence,uTurbulenceSpeed:settings.turbulenceSpeed,uSpring:settings.spring,uDamping:settings.damping,uAspect:width/height,'uTrail[0]':trail,uRadius:settings.ringPointerRadius/height,uRepulsion:settings.ringPointerForce,uPointerDepth:settings.ringPointerDepth,uPointerSwirl:settings.ringPointerSwirl,uReturnSpread:settings.ringReturnSpread,uCameraDistance:settings.cameraDistance,uCameraHalfHeight:halfView,uScreenCenter:screenCenter,uBigBang:bang.progress,uStoryActive:story?1:0,uBangAttraction:settings.bangAttraction,uBeamCount:groups.beam,uCoreCount:groups.core,uBeamLength:shape.length,uBeamRadius:shape.radius,uBeamVariant:settings.beamVariant==='B'?1:0,uPhases:bang.phases,uHotA:hotA.toArray(),uHotB:hotB.toArray()};
+   if(reset||dt>0){gl.useProgram(simulation.program);for(const [name,value]of Object.entries({...data,uDt:dt||1/60,uRecycleWindow:Math.max(1/60,Math.min(.2,elapsed)),uReset:reset?1:0})){const u=simulation.u[name];if(u==null)continue;if(typeof value==='number')gl.uniform1f(u,value);else if(value.length===9)gl.uniformMatrix3fv(u,false,value);else if(value.length===32)gl.uniform4fv(u,value);else gl['uniform'+value.length+'fv'](u,value);}state.step();reset=false;renderer.resetState();}
+   for(const [name,buffer]of [['position',state.position],['velocity',state.velocity]]){if(!attributes.has(buffer))attributes.set(buffer,new THREE.GLBufferAttribute(buffer,gl.FLOAT,3,4,count));for(const g of [geometry,photonGeometry])g.setAttribute(name,attributes.get(buffer));}
+   for(const [name,value]of Object.entries(data))if(uniforms[name])uniforms[name].value=value;
+   uniforms.uRingBasisA.value=new THREE.Matrix3().fromArray(data.uRingBasisA);uniforms.uRingBasisB.value=new THREE.Matrix3().fromArray(data.uRingBasisB);uniforms.uBeamBasis.value=new THREE.Matrix3().fromArray(data.uBeamBasis);uniforms.uPhases.value=new THREE.Vector4(...bang.phases);uniforms.uHotA.value=hotA;uniforms.uHotB.value=hotB;
+   uniforms.uBeamLightColor.value.setRGB(...colors.body);uniforms.uDustColor.value.set(settings.beamDustColor);uniforms.uParticleColor.value.set(settings.particleColor);uniforms.uResolution.value.set(canvas.width,canvas.height);
+   for(const [key,value]of Object.entries({uSphereRadius:profile.mobile?settings.sphereMobileRadius:settings.sphereRadius,uViewportHeight:canvas.height,uDpr:dpr,uLodPixels:profile.mobile?settings.sphereMobileLodPixels:settings.sphereLodPixels,uDofStrength:profile.mobile?settings.sphereMobileDof:settings.sphereDof,uFocusRange:settings.sphereFocusRange,uFocusDistance:settings.cameraDistance,uRingOpacity:settings.ringOpacity,uDiffuse:settings.sphereDiffuse,uAmbient:settings.sphereAmbient,uSpecular:settings.sphereSpecular,uShininess:settings.sphereShininess,uRim:settings.sphereRim,uRimPower:settings.sphereRimPower,uActivityBrightness:settings.ringActivityBrightness}))uniforms[key].value=value;
+   beam.position.set(...shape.center);beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(...shape.direction));beam.scale.set(shape.radius*(settings.beamVariant==='B'?settings.beamDepthRadiusB:settings.beamDepthRadius),shape.length,shape.radius*(settings.beamVariant==='B'?settings.beamDepthRadiusB:settings.beamDepthRadius));beam.visible=bang.beam>.001;
    uniforms.uBeamViewA.value.set(...shape.endpoints[0]).applyMatrix4(camera.matrixWorldInverse);uniforms.uBeamViewB.value.set(...shape.endpoints[1]).applyMatrix4(camera.matrixWorldInverse);
-   bloom.enabled=!debug;bloom.strength=settings.bloomStrength;bloom.radius=settings.bloomRadius;bloom.threshold=settings.bloomThreshold;composer.render();
-   const endpoints=shape.endpoints.map(p=>new THREE.Vector3(...p));
-   const radii=endpoints.map(p=>radius*canvas.height/(2*halfView*(camera.position.z-p.z)));
-   Object.assign(canvas.dataset,{animationTime:age.toFixed(2),particlePhase:intro.text<1?'assembling':'orbiting',beamNearEnd:radii[1]>radii[0]?'superior':'inferior',beamNearRadius:Math.max(...radii).toFixed(3),beamFarRadius:Math.min(...radii).toFixed(3),beamWorldLength:shape.length.toFixed(6),beamWorldRadius:radius.toFixed(6),coreDepth:String(rings.pose.depth),ringRadiusA:String(rings.frames[0].radius),ringRadiusB:String(rings.frames[1].radius),coreScreenCenter:screenCenter.join(','),motionRate:String(drive?.rate||1),motionEnergy:String(drive?.energy||0)});
-   if(!fpsStart)fpsStart=performance.now();fpsFrames++;if(performance.now()-fpsStart>1500){canvas.dataset.fps=(fpsFrames*1000/(performance.now()-fpsStart)).toFixed(1);fpsFrames=0;fpsStart=performance.now();}
-   return intro;
+   lightUniforms.uA.value.copy(uniforms.uBeamViewA.value);lightUniforms.uB.value.copy(uniforms.uBeamViewB.value);lightUniforms.uResolution.value.set(canvas.width,canvas.height);lightUniforms.uColor.value.setRGB(...colors.body);lightUniforms.uCoreColor.value.setRGB(...colors.core);
+   for(const [key,value]of Object.entries({uRadius:shape.radius,uStrength:settings.beamStrength*bang.beam,uTime:age,uCoreWidth:settings.beamCoreWidth,uHdr:settings.beamHdrIntensity,uGlowWidth:settings.beamGlowWidth,uMist:settings.beamMist,uTipFade:settings.beamTipFade,uVariant:data.uBeamVariant}))lightUniforms[key].value=value;
+   cosmicLight.visible=story&&bang.progress<bang.phases[1];cosmicUniforms.uResolution.value.set(canvas.width,canvas.height);cosmicUniforms.uProgress.value=bang.progress;cosmicUniforms.uTime.value=age;cosmicUniforms.uActive.value=story?1:0;cosmicUniforms.uFlash.value=settings.bangFlashIntensity;cosmicUniforms.uPhases.value.set(...bang.phases);cosmicUniforms.uHotA.value.copy(hotA);cosmicUniforms.uHotB.value.copy(hotB);
+   if(bloom){bloom.enabled=!debug;bloom.strength=profile.bloomStrength;bloom.compositeMaterial.uniforms.uGlowColor.value.setRGB(...colors.glow);}composer.render();
+   const radii=shape.endpoints.map(p=>shape.radius*canvas.height/(2*halfView*(camera.position.z-p[2])));
+   Object.assign(canvas.dataset,{animationTime:age.toFixed(2),particlePhase:bang.phase,bangProgress:bang.progress.toFixed(5),bangPhase:bang.phase,beamVariant:settings.beamVariant,beamWorldLength:shape.length.toFixed(6),beamWorldRadius:shape.radius.toFixed(6),beamNearEnd:radii[1]>radii[0]?'superior':'inferior',beamNearRadius:Math.max(...radii).toFixed(3),beamFarRadius:Math.min(...radii).toFixed(3),coreDepth:'0',coreScreenCenter:screenCenter.join(','),ringRadiusA:String(rings.frames[0].radius),ringRadiusB:String(rings.frames[1].radius),motionRate:String(drive?.rate||1),depthOnly:String(beam.material.colorWrite===false)});
+   return bang;
   }
-  const api={resize,draw,async prepare(){
-    if(disposed||!state)return;canvas.dataset.gpuReady='preparing';
-    draw(0);beam.visible=true;renderer.compile(scene,camera);await renderer.compileAsync(scene,camera);if(disposed)return;
-    // Render every composer pass and both external-buffer slots before showing the first frame.
-    draw(8);draw(8+1/60);await waitForGpu(gl);if(disposed)return;api.restart();canvas.dataset.animationTime='0';canvas.dataset.gpuReady='ready';
-   },restart(){startTime=null;lastTime=null;reset=true;},setDebug(value){debug=value;uniforms.uDebug.value=typeof value==='number'?value:(value?1:0);},
-   // Only local test pages call these; production never reads back GPU buffers.
-   inspect:inspection?{renderer,scene,camera,beam,particles,composer,bloom,get state(){return state;},get groups(){return groups;}}:undefined,
-   async attachDevelopmentPanel(){if(!IS_DEVELOPMENT||gui||disposed)return;const {createParticlePanel}=await import('./particle-panel.js');if(disposed)return;gui=await createParticlePanel();if(disposed)gui?.destroy();},
-   dispose(){if(disposed)return;disposed=true;gui?.destroy();releaseGeometry();material.dispose();beamGeometry.dispose();beamMaterials.forEach(m=>m.dispose());bloom.dispose();renderPass.dispose();output.dispose();composer.dispose();resources.dispose();renderer.dispose();if(!gl.isContextLost())renderer.forceContextLoss();}
+  const api={publishProfile(){Object.assign(canvas.dataset,metadata);},canvas,engine:'webgl2',resize,draw,async prepare(){if(disposed||!state)throw Error('El canvas no tiene dimensiones válidas.');canvas.dataset.gpuReady='preparing';draw(0);beam.visible=true;cosmicLight.visible=true;renderer.compile(scene,camera);await renderer.compileAsync(scene,camera);if(disposed)return;draw(8);draw(8+1/60,0,empty,[0,0],{bigBang:.14,phase:8,rate:1,orbitTime:8});await waitForGpu(gl);if(disposed)return;if(gl.getError()!==gl.NO_ERROR)throw Error('La GPU no pudo preparar el framebuffer.');api.restart();canvas.dataset.animationTime='0';canvas.dataset.gpuReady='ready';},restart(){startTime=null;lastTime=null;reset=true;},seek(time,progress=0,trail=empty,unused=[0,0],drive=null){startTime=0;lastTime=null;reset=true;return draw(time,progress,trail,unused,drive);},setDebug(value){debug=value;uniforms.uDebug.value=typeof value==='number'?value:(value?1:0);},inspect:inspection?{renderer,scene,camera,beam,particles,photons,light,cosmicLight,lightUniforms,composer,bloom,get state(){return state;},get groups(){return groups;},get profile(){return profile;}}:undefined,
+   async attachDevelopmentPanel(){if(!IS_DEVELOPMENT||gui||disposed)return;const {createParticlePanel}=await import('./particle-panel.js');if(!disposed)gui=await createParticlePanel();},
+   dispose(){if(disposed)return;disposed=true;gui?.destroy();releaseGeometry();material.dispose();photonMaterial.dispose();beamGeometry.dispose();beamMaterial.dispose();plane.dispose();lightMaterial.dispose();cosmicMaterial.dispose();bloom?.dispose();renderPass.dispose();output.dispose();composer.dispose();resources.dispose();renderer.dispose();if(!gl.isContextLost())renderer.forceContextLoss();}
   };return api;
- }catch(error){state?.dispose();resources?.dispose();renderer?.dispose();console.error('No se pudo crear el núcleo 3D.',error);return null;}
+ }catch(error){state?.dispose();resources?.dispose();renderer?.dispose();canvas.dataset.failure=error.message;return null;}
 }

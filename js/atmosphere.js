@@ -1,11 +1,10 @@
 import {createAuroraRenderer} from './aurora-renderer.js';
-import {createDeviceTilt,tiltOffset} from './particle-orientation.js';
 import {PARTICLE_CONFIG as config,layerBudget,galaxySmallBudget} from './particle-config.js';
 import {createParticleInput} from './particle-input.js';
 import {gpuMath,emptyFragment,rgb,createGpuResources,createGpuState} from './particle-gpu.js';
 
 export const galaxySource=`
-uniform vec2 uResolution;uniform float uTime,uLayer,uCount,uSmallCount,uSpeed,uDepthRatio,uScroll,uParallax,uMediumSpeed,uFrontSpeed,uMediumParallax,uFrontParallax;uniform vec2 uGyro;
+uniform vec2 uResolution;uniform float uTime,uLayer,uCount,uSmallCount,uSpeed,uDepthRatio,uScroll,uParallax,uMediumSpeed,uFrontSpeed,uMediumParallax,uFrontParallax;uniform vec2 uPointerPan;
 float sizeClass(float id){return uLayer>.5?2.:(id<uSmallCount?0.:1.);}
 float parallaxFactor(float kind){return kind>1.5?uFrontParallax:(kind>.5?uMediumParallax:1.);}
 float travelClock(float id,float time){
@@ -28,7 +27,7 @@ Journey journey(float id,float time){
 vec3 galacticRoute(float id){
  Journey trip=journey(id,uTime);float kind=sizeClass(id),depth=trip.position.z;
  float parallax=uScroll*uParallax*(.12+depth*.5)*.5*parallaxFactor(kind);
- return trip.position+vec3(uGyro*(kind>.5&&kind<1.5?1.3:1.)+vec2(0.,parallax),0.);
+ return trip.position+vec3(uPointerPan*(kind>.5&&kind<1.5?1.3:1.)+vec2(0.,parallax),0.);
 }
 `;
 const galaxySimulation=`#version 300 es
@@ -66,7 +65,7 @@ void main(){
   for(int i=0;i<12;i++){
    if(i>=uMaskCount)break;vec4 r=uMasks[i];
    vec2 d=max(max(r.xy-p,p-r.zw),vec2(0.));
-   vec2 center=(r.xy+r.zw)*.5-uGyro;
+   vec2 center=(r.xy+r.zw)*.5-uPointerPan;
    float parallax=uScroll*uParallax*.37*.5*uFrontParallax;
    vec2 cell=clamp(floor(vec2(center.x*uResolution.y/uResolution.x+.5,center.y+.5-parallax)*vec2(columns,rows)),vec2(0.),vec2(columns-1.,rows-1.));
    float owner=cell.y*columns+cell.x,allowed=abs(id-owner)<.5?.22:0.;
@@ -93,25 +92,25 @@ void main(){
 export function createGalaxyRenderer(canvas,front=false){
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'low-power'});if(!gl)return null;
  const resources=createGpuResources(gl);let state=null,width=0,height=0,count=0,dpr=1,lastTime=null,accumulator=0,reset=true,disposed=false;
- const names=['uResolution','uTime','uLayer','uCount','uSpeed','uDepthRatio','uFrameDt','uHalo','uStreak','uSmallCount','uMediumSpeed','uFrontSpeed','uMediumParallax','uFrontParallax','uScroll','uParallax','uDt','uSpring','uDamping','uReset','uTrail[0]','uRadius','uRepulsion','uDpr','uSmallSize','uMediumSize','uFrontSize','uSmallOpacity','uMediumOpacity','uFrontOpacity','uBrightness','uTwinkle','uTwinkleSpeed','uGyro','uColor','uMasks[0]','uMaskCount'];
+ const names=['uResolution','uTime','uLayer','uCount','uSpeed','uDepthRatio','uFrameDt','uHalo','uStreak','uSmallCount','uMediumSpeed','uFrontSpeed','uMediumParallax','uFrontParallax','uScroll','uParallax','uDt','uSpring','uDamping','uReset','uTrail[0]','uRadius','uRepulsion','uDpr','uSmallSize','uMediumSize','uFrontSize','uSmallOpacity','uMediumOpacity','uFrontOpacity','uBrightness','uTwinkle','uTwinkleSpeed','uPointerPan','uColor','uMasks[0]','uMaskCount'];
  function dispose(){if(disposed)return;disposed=true;state?.dispose();resources.dispose();}
  try{
   const simulation=resources.program(galaxySimulation,emptyFragment,names,true),points=resources.program(galaxyVertex,galaxyFragment,names);
   const api={
    resize(force=false){
-    const w=innerWidth,h=innerHeight,budget=layerBudget(w,front,{coarse:matchMedia('(pointer:coarse)').matches}),ratio=Math.min(devicePixelRatio||1,config.maxDpr,1.25);
+    const w=innerWidth,h=innerHeight,budget=layerBudget(w,front,{coarse:matchMedia('(pointer:coarse)').matches}),ratio=Math.min(devicePixelRatio||1,config.maxDpr,w<=700?.85:1.25);
     if(!force&&width===w&&height===h&&budget===count&&ratio===dpr)return;
     width=w;height=h;count=budget;dpr=ratio;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);gl.viewport(0,0,canvas.width,canvas.height);
     state?.dispose();state=createGpuState(gl,count);reset=true;lastTime=null;accumulator=0;canvas.dataset.ambientCount=String(count);
    },
-   draw(time,trail,masks=new Float32Array(48),maskCount=0,tilt=[0,0]){
+   draw(time,trail,masks=new Float32Array(48),maskCount=0){
     if(disposed||gl.isContextLost()||!state)return;
     const elapsed=lastTime===null?0:Math.max(0,time-lastTime),dt=Math.min(1/30,elapsed);lastTime=time;accumulator+=dt;
     function common(target){
      gl.useProgram(target.program);const u=target.u;
      gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uTime,time);gl.uniform1f(u.uLayer,front?1:0);gl.uniform1f(u.uCount,count);
      gl.uniform1f(u.uSpeed,config.travelSpeed);gl.uniform1f(u.uDepthRatio,config.depthTravelRatio);gl.uniform1f(u.uSmallCount,galaxySmallBudget(width,{coarse:matchMedia('(pointer:coarse)').matches}));
-     gl.uniform1f(u.uMediumSpeed,config.mediumSpeed);gl.uniform1f(u.uFrontSpeed,config.frontSpeed);gl.uniform1f(u.uMediumParallax,config.mediumParallax);gl.uniform1f(u.uFrontParallax,config.frontParallax);gl.uniform1f(u.uScroll,scrollY/height);gl.uniform1f(u.uParallax,config.parallax);gl.uniform2fv(u.uGyro,tiltOffset(tilt,front?config.gyroFrontPixels:config.gyroBackPixels,height));
+     gl.uniform1f(u.uMediumSpeed,config.mediumSpeed);gl.uniform1f(u.uFrontSpeed,config.frontSpeed);gl.uniform1f(u.uMediumParallax,config.mediumParallax);gl.uniform1f(u.uFrontParallax,config.frontParallax);gl.uniform1f(u.uScroll,scrollY/height);gl.uniform1f(u.uParallax,config.parallax);gl.uniform2f(u.uPointerPan,trail[2]>0?trail[0]*(front?.018:.008):0,trail[2]>0?trail[1]*(front?.018:.008):0);
      gl.uniform4fv(u['uTrail[0]'],trail);gl.uniform1f(u.uRadius,config.repulsionRadius/height);gl.uniform1f(u.uRepulsion,config.galaxyRepulsion);
     }
     common(simulation);gl.uniform1f(simulation.u.uDt,1/60);gl.uniform1f(simulation.u.uFrameDt,Math.min(.2,elapsed));gl.uniform1f(simulation.u.uSpring,config.galaxySpring);gl.uniform1f(simulation.u.uDamping,config.galaxyDamping);
@@ -128,12 +127,12 @@ export function createGalaxyRenderer(canvas,front=false){
  }catch(error){dispose();console.warn('La galaxia conserva su fondo atmosférico.',error.message);return null;}
 }
 
-export function initAtmosphere(sharedInput=null,sharedOrientation=null){
- const controller=new AbortController(),input=sharedInput||createParticleInput(),orientation=sharedOrientation||createDeviceTilt();
+export function initAtmosphere(sharedInput=null){
+ const controller=new AbortController(),input=sharedInput||createParticleInput();
  const on=(target,event,callback,options={})=>target.addEventListener(event,callback,{passive:true,...options,signal:controller.signal});
  const back=document.createElement('canvas'),front=document.createElement('canvas'),nebula=document.createElement('canvas');
  back.className='ambient-layer ambient-layer--back';front.className='ambient-layer ambient-layer--front';nebula.className='aurora-layer';
- for(const element of [back,front,nebula])element.setAttribute('aria-hidden','true');document.body.prepend(nebula,back);document.body.append(front);
+ for(const element of [back,front,nebula]){element.setAttribute('aria-hidden','true');element.style.opacity='0';}document.body.prepend(nebula,back);document.body.append(front);
  let layers=[createGalaxyRenderer(back),createGalaxyRenderer(front,true)],raf=0,previous=0,time=0,disposed=false,lastMasks=-1000,scrollFlow=scrollY/innerHeight,aurora=createAuroraRenderer(nebula);
  const masks=new Float32Array(48);let maskCount=0;
  function updateMasks(now){
@@ -148,14 +147,14 @@ export function initAtmosphere(sharedInput=null,sharedOrientation=null){
  function request(){if(!disposed&&!document.hidden&&!raf)raf=requestAnimationFrame(draw);}
  function draw(now){
   raf=0;if(disposed||document.hidden)return;const dt=previous?Math.min((now-previous)/1000,.05):0;time+=dt;previous=now;
-  updateMasks(now);const trail=input.sample(innerWidth,innerHeight),tilt=orientation.sample();
+  updateMasks(now);const trail=input.sample(innerWidth,innerHeight);
   scrollFlow+=(scrollY/innerHeight-scrollFlow)*(1-Math.exp(-dt*2.4));
-  aurora?.draw(time,scrollFlow,trail,masks,maskCount,tilt);layers[0]?.draw(time,trail,masks,0,tilt);layers[1]?.draw(time,trail,masks,maskCount,tilt);
+  aurora?.draw(time,scrollFlow,trail,masks,maskCount);layers[0]?.draw(time,trail,masks,0);layers[1]?.draw(time,trail,masks,maskCount);
     request();
  }
  function resize(force=false){layers.forEach(layer=>layer?.resize(force));aurora?.resize(force);lastMasks=-1000;request();}
  function dispose(){
-  if(disposed)return;disposed=true;controller.abort();if(raf)cancelAnimationFrame(raf);layers.forEach(layer=>layer?.dispose());layers=[];aurora?.dispose();back.remove();front.remove();nebula.remove();if(!sharedInput)input.dispose();if(!sharedOrientation)orientation.dispose();
+  if(disposed)return;disposed=true;controller.abort();if(raf)cancelAnimationFrame(raf);layers.forEach(layer=>layer?.dispose());layers=[];aurora?.dispose();back.remove();front.remove();nebula.remove();if(!sharedInput)input.dispose();
  }
  on(window,'resize',()=>resize());on(window,'particle-config-change',()=>resize(true));
  on(document,'visibilitychange',()=>{previous=0;if(document.hidden&&raf){cancelAnimationFrame(raf);raf=0;}else request();});
@@ -165,5 +164,5 @@ export function initAtmosphere(sharedInput=null,sharedOrientation=null){
  }
  on(nebula,'webglcontextlost',event=>{event.preventDefault();aurora?.dispose();aurora=null;},{passive:false});
  on(nebula,'webglcontextrestored',()=>{aurora=createAuroraRenderer(nebula);resize();});
- resize();return {dispose};
+ resize();return {dispose,setReveal(value){for(const element of [back,front,nebula])element.style.opacity=String(value);}};
 }

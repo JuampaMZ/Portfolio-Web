@@ -1,0 +1,21 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Big Bang · pruebas GPU</title><style>body{background:#04080d;color:#eff5ee;font:13px system-ui}button{padding:12px}pre{white-space:pre-wrap}canvas{width:640px;height:400px}</style><h1>Continuidad de identidades y compatibilidad GPU</h1><button>Ejecutar pruebas GPU</button><pre>Listo.</pre><canvas></canvas><script type="module">
+import {createMeshCore} from '../js/core-mesh-renderer.js';import {PARTICLE_CONFIG as config} from '../js/particle-config.js';import {verifyFrame} from './mesh-checks.js';
+const canvas=document.querySelector('canvas'),out=document.querySelector('pre'),empty=new Float32Array(32),query=new URLSearchParams(location.search);
+document.querySelector('button').onclick=async()=>{
+ let core,original;const rows=[],assert=(ok,text)=>{if(!ok)throw Error(text);rows.push('✓ '+text);};
+ try{
+  core=createMeshCore(canvas,{inspection:true,quality:{forceLow:query.get('quality')==='low'}});assert(!!core,'WebGL2 y framebuffer elegidos correctamente');core.resize(innerWidth,innerHeight);await core.prepare();assert(canvas.dataset.gpuReady==='ready','Shaders, pases y dos slots precalentados');
+  const {renderer,state,groups,beam,particles}=core.inspect,gl=renderer.getContext(),read=()=>{const data=new Float32Array(192*3);gl.bindBuffer(gl.ARRAY_BUFFER,state.position);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);renderer.resetState();return data;};
+  let allocations=0;original=gl.bufferData.bind(gl);gl.bufferData=(...args)=>{allocations++;return original(...args);};const handles=new Set(),snapshots=[];
+  for(const progress of [.05,.14,.55,.76,1,.76,.55,.14,.05]){core.seek(50,0,empty,[0,0],{phase:50,rate:1,bigBang:progress,orbitTime:progress>=.9?50:0});handles.add(state.position);const points=read();assert([...points].every(Number.isFinite),'Posiciones finitas en '+Math.round(progress*100)+'%');snapshots.push(points);}
+  assert(allocations===0&&handles.size<=2,'Mismos buffers e IDs en avance y retroceso, sin reasignaciones');assert(snapshots[0].every((v,i)=>Math.abs(v-snapshots.at(-1)[i])<1e-7),'Singularidad reversible, sin reemplazar el sistema');
+  const extent=v=>Math.max(...v.map(Math.abs));assert(extent(snapshots[0])<.02&&extent(snapshots[2])>.2,'De singularidad compacta a expansión espacial');
+  assert(!beam.material.colorWrite&&beam.material.depthWrite&&particles.material.depthTest,'Proxy invisible y oclusión real');
+  const before=state.position,total=canvas.dataset.particleCount;for(const mode of ['A','B']){config.beamVariant=mode;core.seek(58);core.draw(58);assert(canvas.dataset.particleCount===total&&core.inspect.groups.beam>0,'Versión '+mode+' precargada, cantidad estable');core.setDebug(true);for(const time of [50,58,75]){core.seek(time);rows.push(...verifyFrame(core,time,canvas,0).map(t=>'✓ '+mode+' · '+time+' · '+t));}core.setDebug(false);}
+  assert(allocations===0,'Cambiar A/B tampoco reasigna buffers');gl.bufferData=original;original=null;
+  for(const [w,h]of [[390,844],[412,915],[1280,800]]){core.resize(w,h);core.seek(58);assert(gl.getError()===0,'Resize '+w+'×'+h+' sin errores');}
+  core.dispose();core=null;assert(gl.isContextLost(),'Contexto exclusivo liberado al desmontar');out.dataset.status='passed';
+ }catch(error){rows.push('✗ '+error.message);out.dataset.status='failed';console.error(error);}
+ finally{if(original&&core)core.inspect.renderer.getContext().bufferData=original;core?.dispose();out.textContent=rows.join('\n');}
+};
+</script></html>

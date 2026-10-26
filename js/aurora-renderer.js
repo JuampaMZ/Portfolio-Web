@@ -1,9 +1,8 @@
 import {PARTICLE_CONFIG as config} from './particle-config.js';
 import {fullscreenVertex,rgb,createGpuResources} from './particle-gpu.js';
-import {tiltOffset} from './particle-orientation.js';
 const fragment=`#version 300 es
 precision highp float;
-uniform vec2 uResolution,uGyro;
+uniform vec2 uResolution,uPointerPan;
 uniform float uTime,uScroll,uIntensity,uSpeed,uNoiseScale,uScrollAmount,uPointer;
 uniform int uCurtains,uMaskCount;
 uniform vec3 uColorA,uColorB,uColorC,uColorD;
@@ -14,7 +13,7 @@ float fbm(vec2 p){float sum=0.,amplitude=.5;for(int i=0;i<4;i++){sum+=noise(p)*a
 void main(){
  vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
  float clock=uTime*uSpeed,flow=uScroll*uScrollAmount;
- vec2 p=screen-uGyro;float rotation=sin(flow*.42+clock*.09)*.62;
+ vec2 p=screen-uPointerPan;float rotation=sin(flow*.42+clock*.09)*.62;
  p=mat2(cos(rotation),-sin(rotation),sin(rotation),cos(rotation))*p;
  p.y+=sin(flow*.55)*.22;p.x+=cos(flow*.23)*.14;
  for(int i=0;i<8;i++){
@@ -48,20 +47,20 @@ void main(){
 export function createAuroraRenderer(canvas){
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'low-power'});if(!gl)return null;
  const resources=createGpuResources(gl);let vao=null,disposed=false,width=0,height=0,ratio=0;
- const names=['uResolution','uGyro','uTime','uScroll','uIntensity','uSpeed','uNoiseScale','uScrollAmount','uPointer','uCurtains','uMaskCount','uColorA','uColorB','uColorC','uColorD','uTrail[0]','uMasks[0]'];
+ const names=['uResolution','uPointerPan','uTime','uScroll','uIntensity','uSpeed','uNoiseScale','uScrollAmount','uPointer','uCurtains','uMaskCount','uColorA','uColorB','uColorC','uColorD','uTrail[0]','uMasks[0]'];
  function dispose(){if(disposed)return;disposed=true;if(vao)gl.deleteVertexArray(vao);resources.dispose();}
  try{
   const target=resources.program(fullscreenVertex,fragment,names);vao=gl.createVertexArray();
   return {
    resize(force=false){
-    const w=innerWidth,h=innerHeight,mobile=w<=700||matchMedia('(pointer:coarse)').matches,next=Math.min(.6,Math.max(.2,mobile?config.auroraMobileResolution:config.auroraResolution));
+    const w=innerWidth,h=innerHeight,mobile=w<=700||matchMedia('(pointer:coarse)').matches,next=Math.min(.6,Math.max(.15,mobile?config.auroraMobileResolution:config.auroraResolution));
     if(!force&&w===width&&h===height&&ratio===next)return;if(w<=0||h<=0)return;
     width=w;height=h;ratio=next;canvas.width=Math.max(1,Math.round(w*ratio));canvas.height=Math.max(1,Math.round(h*ratio));gl.viewport(0,0,canvas.width,canvas.height);canvas.dataset.resolutionScale=ratio.toFixed(2);
    },
-   draw(time,scroll,trail,masks=new Float32Array(48),maskCount=0,tilt=[0,0]){
+   draw(time,scroll,trail,masks=new Float32Array(48),maskCount=0){
     if(disposed||gl.isContextLost())return;
     gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);if(config.auroraIntensity<=0)return;gl.useProgram(target.program);const u=target.u;
-    gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform2fv(u.uGyro,tiltOffset(tilt,config.gyroAuroraPixels,height));
+    gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform2f(u.uPointerPan,trail[2]>0?trail[0]*.004:0,trail[2]>0?trail[1]*.004:0);
     for(const [name,value]of Object.entries({uTime:time,uScroll:scroll,uIntensity:config.auroraIntensity,uSpeed:config.auroraSpeed,uNoiseScale:config.auroraNoiseScale,uScrollAmount:config.auroraScroll,uPointer:config.auroraPointer}))gl.uniform1f(u[name],value);
     gl.uniform1i(u.uCurtains,Math.max(1,Math.min(4,Math.round(config.auroraCurtains))));gl.uniform1i(u.uMaskCount,maskCount);
     for(const key of ['A','B','C','D'])gl.uniform3fv(u['uColor'+key],rgb(config['auroraColor'+key]));
