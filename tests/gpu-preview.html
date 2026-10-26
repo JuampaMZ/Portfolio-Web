@@ -11,7 +11,7 @@ import {gpuMath,emptyFragment,createGpuResources,createGpuState} from '../js/par
 const output=document.querySelector('pre'),host=document.querySelector('#canvases');
 function tracked(){
  const canvas=document.createElement('canvas');host.append(canvas);
- const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false});
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:true});
  const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
  for(const kind of kinds){
   const create=gl['create'+kind].bind(gl),destroy=gl['delete'+kind].bind(gl);
@@ -20,13 +20,13 @@ function tracked(){
  }
  let latest=null;const draw=gl.drawArrays.bind(gl);
  gl.drawArrays=(...args)=>{if(!gl.isEnabled(gl.RASTERIZER_DISCARD))latest=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);return draw(...args);};
- return {canvas,gl,resources,sample(offset=0,count=256){const data=new Float32Array(count*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,offset*24,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
+ return {canvas,gl,resources,replacePoints(count,indices,position){const data=new Float32Array(count*6);for(let i=0;i<count;i++)data[i*6]=50;for(const index of indices)data.set([...position,0,0,0],index*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.bufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);},pixel(x,y){const p=new Uint8Array(4);gl.readPixels(x,y,1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return [...p];},sample(offset=0,count=256){const data=new Float32Array(count*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,offset*24,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
 }
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
 document.querySelector('button').addEventListener('click',async()=>{
  output.textContent='Ejecutando comprobaciones GPU…';await new Promise(requestAnimationFrame);
  const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
- const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null,foreground=null,travelState=null,travelResources=null;const oldRadius=config.repulsionRadius,oldHalo=config.planetHalo,oldTrail=config.planetTrail;
+ const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null,foreground=null,travelState=null,travelResources=null;const oldRadius=config.repulsionRadius,oldHalo=config.planetHalo,oldTrail=config.planetTrail,oldFlow=config.beamDustFlow,oldNoise=config.beamHelixTurbulence;
  try{
   control=createCinemaRenderer(a.canvas);perturbed=createCinemaRenderer(b.canvas);assert(Boolean(control&&perturbed),'Shaders de órbitas y nube compilados');
   control.resize(800,500);perturbed.resize(800,500);const empty=new Float32Array(32);
@@ -71,8 +71,31 @@ document.querySelector('button').addEventListener('click',async()=>{
   for(let i=1;i<=12;i++)control.draw(8.5+i/60,0,empty);const dustLater=a.sample(dustOffset,256);
   for(let i=0;i<dustLater.length;i+=6){const along=[0,1,2].reduce((sum,j)=>sum+(dustLater[i+j]-laterCenter[j])/1.06*laterPose.direction[j],0),delta=along-flowAxial[i/6];if(Math.abs(delta)<.04){if(delta>.001)positive++;if(delta<-.001)negative++;}}
   assert(positive>70&&negative>70,'Flujo axial suave en ambos sentidos sin formar un disco');
+  const localDust=(time,data)=>{const scene=interlockedRings(time),m=bandBasis(scene.pose.direction),c=[.376*(1-scene.pose.depth*.38),.055*(1-scene.pose.depth*.38),scene.pose.depth],values=[];for(let i=0;i<data.length;i+=6){const p=[0,1,2].map(j=>(data[i+j]-c[j])/1.06);values.push([m[0]*p[0]+m[1]*p[1]+m[2]*p[2],m[3]*p[0]+m[4]*p[1]+m[5]*p[2],m[6]*p[0]+m[7]*p[1]+m[8]*p[2]]);}return values;};
+  config.beamDustFlow=0;config.beamHelixTurbulence=0;control.resize(800,500,true);control.draw(8.7,0,empty);const strands0=localDust(8.7,a.sample(dustOffset,256));
+  control.resize(800,500,true);control.draw(8.9,0,empty);const strands1=localDust(8.9,a.sample(dustOffset,256));let clockwise=0,counter=0;
+  for(let i=0;i<strands0.length;i++){const delta=Math.atan2(strands1[i][2],strands1[i][0])-Math.atan2(strands0[i][2],strands0[i][0]),angle=Math.atan2(Math.sin(delta),Math.cos(delta));if(angle>.02)clockwise++;if(angle<-.02)counter++;}
+  assert(clockwise>60&&counter>60,'Las hélices giran efectivamente en sentidos opuestos');
+  config.beamDustFlow=oldFlow;control.resize(800,500,true);control.draw(9.1,0,empty);const cleanStrands=a.sample(dustOffset,256);
+  config.beamHelixTurbulence=oldNoise;control.resize(800,500,true);control.draw(9.1,0,empty);const organicStrands=a.sample(dustOffset,256);let distorted=0;for(let i=0;i<organicStrands.length;i+=6)if(Math.hypot(organicStrands[i]-cleanStrands[i],organicStrands[i+1]-cleanStrands[i+1],organicStrands[i+2]-cleanStrands[i+2])>.0001)distorted++;
+  assert(distorted>180,'Curl noise deforma las hélices sin cambiar el eje del reloj');
+  const originalCount=Number(a.canvas.dataset.particleCount),bandIds=Array.from({length:256},(_,i)=>i),dustIds=Array.from({length:128},(_,i)=>dustOffset+i);
+  const rgbDistance=(x,y)=>Math.abs(x[0]-y[0])+Math.abs(x[1]-y[1])+Math.abs(x[2]-y[2]);
+  for(const time of [10,17.5,30,42.5]){
+   control.draw(time,0,empty);const ray=interlockedRings(time).pose;
+   const px=Math.floor(a.canvas.width*.735),py=Math.floor(a.canvas.height*.555);
+   a.replacePoints(originalCount,[],[50,50,0]);control.draw(time,0,empty);const beamOnly=a.pixel(px,py);
+   const position=z=>[.376*(1-z*.38),.055*(1-z*.38),z];
+   a.replacePoints(originalCount,bandIds,position(ray.depth-.18));control.draw(time,0,empty);const behind=a.pixel(px,py);
+   a.replacePoints(originalCount,bandIds,position(ray.depth+.18));control.draw(time,0,empty);const front=a.pixel(px,py);
+   assert(rgbDistance(beamOnly,behind)<5,'La banda trasera queda oculta por el núcleo a t='+time);
+   assert(beamOnly[0]+beamOnly[1]+beamOnly[2]-front[0]-front[1]-front[2]>90,'La banda delantera tapa la luz con cobertura a t='+time);
+   a.replacePoints(originalCount,dustIds,position(ray.depth-.18));control.draw(time,0,empty);assert(rgbDistance(beamOnly,a.pixel(px,py))<5,'Las hélices traseras respetan la profundidad a t='+time);
+   await new Promise(requestAnimationFrame);
+  }
+  assert(a.gl.getContextAttributes().depth,'El canvas del núcleo tiene buffer de profundidad real');
   control.resize(390,844);control.draw(9,0,empty);
-  assert(Number(a.canvas.dataset.particleCount)<=10000&&Number(a.canvas.dataset.pixelRatio)<=2,'Resize reduce partículas y DPR en móvil');
+  assert(Number(a.canvas.dataset.particleCount)<=19000&&Number(a.canvas.dataset.pixelRatio)<=2,'Resize reduce partículas y DPR en móvil');
   assert(a.canvas.dataset.particlePhase==='orbiting','El resize no reinicia la entrada ni detiene la animación');
   assert(a.resources.get('Buffer').size===2&&a.resources.get('VertexArray').size===2&&a.resources.get('TransformFeedback').size===2,'Resize libera los buffers anteriores');
   assert(a.gl.getError()===a.gl.NO_ERROR&&b.gl.getError()===b.gl.NO_ERROR,'Núcleo sin errores WebGL');
@@ -127,6 +150,6 @@ void main(){Journey trip=journey(float(gl_VertexID),uTime);nextPosition=trip.pos
   atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.aurora-layer').length===0,'Desmontaje retira canvas, nebulosa y listeners');
   output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
  }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);}
- finally{config.repulsionRadius=oldRadius;config.planetHalo=oldHalo;config.planetTrail=oldTrail;travelState?.dispose();travelResources?.dispose();control?.dispose();perturbed?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
+ finally{config.beamDustFlow=oldFlow;config.beamHelixTurbulence=oldNoise;config.repulsionRadius=oldRadius;config.planetHalo=oldHalo;config.planetTrail=oldTrail;travelState?.dispose();travelResources?.dispose();control?.dispose();perturbed?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
 });
 </script></html>

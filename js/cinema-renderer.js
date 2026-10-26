@@ -1,14 +1,15 @@
-import {interlockedRings,bandBasis,beamEndpoints} from './particle-motion.js';
+import {interlockedRings,bandBasis,beamEndpoints,beamWorldEndpoints} from './particle-motion.js';
 import {tiltOffset} from './particle-orientation.js';
 import {IS_DEVELOPMENT} from './environment.js';
 import {PARTICLE_CONFIG as config,particleBudget,nucleusGroups,introState} from './particle-config.js';
-import {gpuMath,fullscreenVertex,emptyFragment,rgb,createGpuResources,createGpuState} from './particle-gpu.js';
+import {gpuMath,nucleusProjection,fullscreenVertex,emptyFragment,rgb,createGpuResources,createGpuState} from './particle-gpu.js';
 export {PARTICLE_CONFIG,particleBudget} from './particle-config.js';
 
 const orbitalSource=`
 uniform vec4 uPlacement;uniform vec3 uCenter;uniform mat3 uRingBasisA,uRingBasisB,uBeamBasis;uniform vec2 uRingRadii;
 uniform float uRingCount,uGapCount,uGapOpacity,uNeckClearance,uTubeBound;
 uniform float uDustLength,uDustWaist,uDustEndRadius,uDustSpin,uDustFlow,uDustOpacity;
+uniform float uHelixCount,uHelixReverse,uHelixTurbulence,uHelixNoiseSpeed;uniform vec2 uHelixRadii,uHelixSpeeds;
 uniform float uFlowSpeed,uGap,uTipFade,uBandRadius,uBandThickness,uBandHeight,uBandShear,uTurbulence,uTurbulenceSpeed;
 vec2 bandTube(float id){
  float radius=min(1.12,sqrt(-2.*log(max(random(id+15.),.00001)))*.36),angle=random(id+18.)*6.2831853;
@@ -34,11 +35,18 @@ float dustPhase(float id,float time){
 }
 vec3 beamDustLocal(float id,float time){
  float phase=dustPhase(id,time),axial=phase*2.-1.;
- float cone=(sqrt(axial*axial+.0025)-.05)/.95124922;
- float envelope=mix(uDustWaist,uDustEndRadius,cone);
- float radius=envelope*(.48+.52*sqrt(random(id+31.)));
- float angle=random(id+4.)*6.2831853+time*uDustSpin*(.9+random(id+17.)*.2)+axial*3.92699082;
- return vec3(cos(angle)*radius,axial*uDustLength*.5,sin(angle)*radius);
+ float cone=(sqrt(axial*axial+.0025)-.05)/.95124922,envelope=mix(uDustWaist,uDustEndRadius,cone);
+ float strand=mod(id-uRingCount-uGapCount,uHelixCount),seed=random(strand+901.);
+ float direction=strand<floor(uHelixCount*uHelixReverse+.5)?-1.:1.;
+ float speed=mix(uHelixSpeeds.x,uHelixSpeeds.y,random(strand+917.));
+ float radius=envelope*mix(uHelixRadii.x,uHelixRadii.y,seed)*(.86+random(id+31.)*.14);
+ radius*=.92+.08*sin(axial*3.+time*.23+strand);
+ float angle=strand/uHelixCount*6.2831853+time*uDustSpin*speed*direction+axial*(4.+random(strand+937.)*3.)+(random(id+4.)-.5)*.10;
+ vec3 p=vec3(cos(angle)*radius,axial*uDustLength*.5,sin(angle)*radius);
+ vec3 noise=curlNoise(vec3(p.x*24.,axial*3.,p.z*24.)+strand*1.73,time*uHelixNoiseSpeed);
+ p+=noise*uHelixTurbulence*(.3+cone*.7);
+ p.xz*=min(1.,envelope/max(length(p.xz),.00001));p.y=clamp(p.y,-uDustLength*.5,uDustLength*.5);
+ return p;
 }
 vec3 orbitalTarget(float id,float time){
  vec3 p;
@@ -82,27 +90,29 @@ void main(){
 const pointVertex=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
-uniform vec2 uResolution;uniform float uSize,uDpr,uTime;
-out float vEnergy,vTint,vActivity,vRing,vCoreScale;
-`+gpuMath+orbitalSource+`
+uniform vec2 uResolution;uniform float uSize,uDpr,uTime,uOcclusion;
+out float vEnergy,vTint,vActivity,vRing,vCoreScale,vWorldZ;
+`+gpuMath+nucleusProjection+orbitalSource+`
 void main(){
  float id=float(gl_VertexID),seed=random(id+1.);bool band=inBand(id),gap=inGap(id);vec3 p=aPosition;float perspective=1./max(.55,1.-p.z*.38);
- gl_Position=vec4(p.x*perspective*2.*uResolution.y/uResolution.x,p.y*perspective*2.,0.,1.);
+ gl_Position=scenePosition(p,uResolution);vWorldZ=p.z;
+ if(uOcclusion>.5){vec2 screen=p.xy*perspective;float t=beamFraction(screen);if(!band||beamDistance(screen,t)*uResolution.y/uDpr>10.||p.z<=beamWorldDepth(t)+.00005){gl_Position=vec4(3.,3.,3.,1.);gl_PointSize=1.;vEnergy=0.;return;}}
  gl_PointSize=max(1.,uSize*uDpr*(.6+seed*.8)*clamp(perspective,.7,1.5)*(band?1.:(gap?.38:.48)));
  // Keep subpixel dust visible without enlarging the surrounding halo.
  vCoreScale=band?12.96:min(12.96,pow(gl_PointSize/max(1.,1.7*uDpr),2.));
  vec2 tube=bandTube(id);
  float density=exp(-dot(tube,tube)*2.2),edge=1.-smoothstep(.65,1.15,length(tube));
  float dust=dustPhase(id,uTime),dustFade=smoothstep(0.,.045,dust)*(1.-smoothstep(.955,1.,dust));
- vEnergy=band?(.40+density*1.2)*edge*tipOpacity(id,uTime):(gap?uGapOpacity*tipOpacity(id,uTime):uDustOpacity*(.45+.55*abs(dust*2.-1.))*dustFade);
+ vEnergy=band?(.40+density*1.2)*edge*tipOpacity(id,uTime):(gap?uGapOpacity*tipOpacity(id,uTime):uDustOpacity*(.45+.55*abs(dust*2.-1.))*dustFade*(1.+step(.965,random(id+113.))*.8));
  vRing=secondRing(id)?1.:0.;
  vTint=band||gap?clamp(.45+p.z*.7,0.,1.):1.8;vActivity=clamp(length(nucleusPointer(p))*.5,0.,1.);
 }`;
 const pointFragment=`#version 300 es
 precision highp float;
-in float vEnergy,vTint,vActivity,vRing,vCoreScale;
-uniform vec3 uColorA,uColorB,uActiveColor,uRingColorA,uRingColorB;uniform float uGain;
+in float vEnergy,vTint,vActivity,vRing,vCoreScale,vWorldZ;
+uniform vec3 uColorA,uColorB,uActiveColor,uRingColorA,uRingColorB;uniform float uGain,uOcclusion,uFrontCoverage,uDpr,uCoreWidth;uniform vec2 uResolution;
 out vec4 color;
+`+nucleusProjection+`
 void main(){
  vec2 uv=gl_PointCoord*2.-1.;float r=dot(uv,uv);if(r>1.)discard;
  // Combine the soft halo and sharp center in one point pass.
@@ -110,43 +120,54 @@ void main(){
  float coreRadius=r*vCoreScale,core=exp(-coreRadius*2.7)*(1.-smoothstep(.65,1.,coreRadius));
  float soft=core+halo*.055;
  vec3 tint=mix(mix(uRingColorA,uRingColorB,vRing),mix(uColorA,uColorB,clamp(vTint,0.,1.)),.35);tint=mix(tint,uActiveColor,max(vActivity*.86,step(1.,vTint)*.65));
- color=vec4(tint,soft*vEnergy*(1.+vActivity*.65)*uGain);
+ if(uOcclusion>.5){
+  vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;float t=beamFraction(screen),distance=beamDistance(screen,t)*uResolution.y/uDpr;
+  if(vWorldZ<=beamWorldDepth(t)+.00005)discard;
+  float zone=1.-smoothstep(uCoreWidth*.65,uCoreWidth+1.,distance),body=exp(-r*4.)*(1.-smoothstep(.65,1.,r));
+  float coverage=clamp(body*vEnergy*uGain*uFrontCoverage,0.,.94)*zone;if(coverage<.004)discard;
+  color=vec4(tint*(coverage+soft*vEnergy*uGain*zone*.32),coverage);
+ }else color=vec4(tint,soft*vEnergy*(1.+vActivity*.65)*uGain);
 }`;
 const beamFragment=`#version 300 es
 precision highp float;
-uniform vec2 uResolution;uniform vec4 uBeamEnds;uniform float uDpr,uTime,uBeamStrength,uBeamGrowth,uPulseSpeed;uniform vec3 uBeamColor;
+uniform vec2 uResolution;uniform float uDpr,uTime,uBeamStrength,uBeamGrowth,uPulseSpeed,uBeamPass,uCoreWidth;uniform vec3 uBeamColor;
 out vec4 color;
+`+nucleusProjection+`
 void main(){
+ gl_FragDepth=1.;
  vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
  vec2 segment=uBeamEnds.zw-uBeamEnds.xy;float len=max(.0001,length(segment));
  vec2 direction=segment/len;float t=dot(screen-uBeamEnds.xy,direction);
  float along=(t-len*.5)*uResolution.y/uDpr;
  float distance=length(screen-(uBeamEnds.xy+direction*clamp(t,0.,len)))*uResolution.y/uDpr;
- if(distance>110.){color=vec4(0.);return;}
+ if(distance>110.)discard;
+ if(uBeamPass>.5&&distance>uCoreWidth)discard;
  float extent=len*.5*uResolution.y/uDpr,cap=1.-smoothstep(extent*.84,extent,abs(along));
  float core=exp(-pow(distance/1.35,1.35)),inner=exp(-distance/5.5)*.46,bloom=exp(-distance/28.)*.075;
  float pulse=exp(-pow((along-sin(uTime*uPulseSpeed)*extent*.78)/32.,2.));
  float flare=exp(-distance/66.)*exp(-pow(along/2.4,2.))*.055;
- vec3 energy=uBeamColor*(inner+bloom)*(1.+pulse*.55)+mix(uBeamColor,vec3(1.),.7)*core*(1.4+pulse*.25);
- vec3 light=vec3(1.)-exp(-(energy*cap+uBeamColor*.8*flare)*uBeamStrength*uBeamGrowth);
+ vec3 energy=uBeamPass>.5?mix(uBeamColor,vec3(1.),.7)*core*(1.4+pulse*.25):uBeamColor*(inner+bloom)*(1.+pulse*.55);
+ if(uBeamPass>.5){if(cap*uBeamGrowth<.001)discard;gl_FragDepth=sceneDepth(beamWorldDepth(beamFraction(screen)));}
+ vec3 light=vec3(1.)-exp(-(energy*cap+(uBeamPass<.5?uBeamColor*.8*flare:vec3(0.)))*uBeamStrength*uBeamGrowth);
  float alpha=max(light.r,max(light.g,light.b));color=vec4(light/max(alpha,.0001),alpha);
 }`;
 
 export function createCinemaRenderer(canvas){
- const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'high-performance'});if(!gl)return null;
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:true,powerPreference:'high-performance'});if(!gl)return null;
  const resources=createGpuResources(gl);let state=null,disposed=false,width=0,height=0,dpr=1,count=0,reset=true,gui=null;
  let startTime=null,lastTime=null,accumulator=0,fpsStart=null,fpsFrames=0;
- let placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),groups={ring:0,gap:0,dust:0};const emptyTrail=new Float32Array(32);
+ let placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),groups={ring:0,gap:0,dust:0},rayEnds=new Float32Array(4),rayWorld=[[0,0,0],[0,0,0]];const emptyTrail=new Float32Array(32);
  const development=IS_DEVELOPMENT&&['localhost','127.0.0.1','[::1]'].includes(location.hostname);
- const names=['uResolution','uPlacement','uCenter','uRingBasisA','uRingBasisB','uRingRadii','uGap','uFlowSpeed','uTipFade','uBandRadius','uBandThickness','uBandHeight','uBeamBasis','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uBandShear','uBeamEnds','uPulseSpeed','uTurbulenceSpeed','uTurbulence','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTrail[0]','uRadius','uRepulsion','uSize','uDpr','uColorA','uColorB','uActiveColor','uGain','uRingColorA','uRingColorB','uBeamStrength','uBeamGrowth','uBeamColor'];
+ const names=['uResolution','uPlacement','uCenter','uRingBasisA','uRingBasisB','uRingRadii','uGap','uFlowSpeed','uTipFade','uBandRadius','uBandThickness','uBandHeight','uBeamBasis','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uHelixCount','uHelixRadii','uHelixSpeeds','uHelixReverse','uHelixTurbulence','uHelixNoiseSpeed','uOcclusion','uFrontCoverage','uBeamWorldA','uBeamWorldB','uBeamPass','uCoreWidth','uBandShear','uBeamEnds','uPulseSpeed','uTurbulenceSpeed','uTurbulence','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTrail[0]','uRadius','uRepulsion','uSize','uDpr','uColorA','uColorB','uActiveColor','uGain','uRingColorA','uRingColorB','uBeamStrength','uBeamGrowth','uBeamColor'];
  function dispose(){if(disposed)return;disposed=true;gui?.destroy();state?.dispose();resources.dispose();}
  try{
   const simulation=resources.program(simulationVertex,emptyFragment,names,true),points=resources.program(pointVertex,pointFragment,names),beam=resources.program(fullscreenVertex,beamFragment,names);
   function uniforms(target,age,trail){
    gl.useProgram(target.program);const u=target.u;
-   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform4fv(u.uPlacement,placement);gl.uniform3fv(u.uCenter,center);gl.uniformMatrix3fv(u.uRingBasisA,false,rings.frames[0].basis);gl.uniformMatrix3fv(u.uRingBasisB,false,rings.frames[1].basis);gl.uniform2f(u.uRingRadii,rings.frames[0].radius,rings.frames[1].radius);gl.uniform1f(u.uGap,rings.geometry.gap);gl.uniform1f(u.uFlowSpeed,config.ringFlowSpeed);gl.uniform1f(u.uTipFade,Math.max(.002,Math.min(.08,config.ringTipFade)));gl.uniformMatrix3fv(u.uBeamBasis,false,bandBasis(rings.pose.direction));gl.uniform1f(u.uRingCount,groups.ring);gl.uniform1f(u.uGapCount,groups.gap);gl.uniform1f(u.uGapOpacity,config.gapOpacity);gl.uniform1f(u.uNeckClearance,rings.geometry.clearanceFraction);gl.uniform1f(u.uTubeBound,rings.geometry.tube);
+   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform4fv(u.uPlacement,placement);gl.uniform3fv(u.uCenter,center);gl.uniform4fv(u.uBeamEnds,rayEnds);gl.uniform3fv(u.uBeamWorldA,rayWorld[0]);gl.uniform3fv(u.uBeamWorldB,rayWorld[1]);gl.uniformMatrix3fv(u.uRingBasisA,false,rings.frames[0].basis);gl.uniformMatrix3fv(u.uRingBasisB,false,rings.frames[1].basis);gl.uniform2f(u.uRingRadii,rings.frames[0].radius,rings.frames[1].radius);gl.uniform1f(u.uGap,rings.geometry.gap);gl.uniform1f(u.uFlowSpeed,config.ringFlowSpeed);gl.uniform1f(u.uTipFade,Math.max(.002,Math.min(.08,config.ringTipFade)));gl.uniformMatrix3fv(u.uBeamBasis,false,bandBasis(rings.pose.direction));gl.uniform1f(u.uRingCount,groups.ring);gl.uniform1f(u.uGapCount,groups.gap);gl.uniform1f(u.uGapOpacity,config.gapOpacity);gl.uniform1f(u.uCoreWidth,config.beamCoreWidth);gl.uniform1f(u.uNeckClearance,rings.geometry.clearanceFraction);gl.uniform1f(u.uTubeBound,rings.geometry.tube);
    const endRadius=Math.min(Math.max(.012,config.beamDustEndRadius),rings.geometry.radius*.24);
-   gl.uniform1f(u.uDustLength,Math.min(.90,Math.max(.3,config.beamDustLength)));gl.uniform1f(u.uDustWaist,Math.min(Math.max(.001,config.beamDustWaist),endRadius*.5));gl.uniform1f(u.uDustEndRadius,endRadius);gl.uniform1f(u.uDustSpin,config.beamDustSpin);gl.uniform1f(u.uDustFlow,config.beamDustFlow);gl.uniform1f(u.uDustOpacity,Math.min(.35,config.beamDustOpacity));gl.uniform1f(u.uBandRadius,rings.geometry.radius);gl.uniform1f(u.uBandThickness,rings.geometry.thickness);gl.uniform1f(u.uBandShear,config.bandShear);gl.uniform1f(u.uTime,age);gl.uniform1f(u.uDpr,dpr);
+   gl.uniform1f(u.uDustLength,Math.min(.90,Math.max(.3,config.beamDustLength)));gl.uniform1f(u.uDustWaist,Math.min(Math.max(.001,config.beamDustWaist),endRadius*.5));gl.uniform1f(u.uDustEndRadius,endRadius);gl.uniform1f(u.uDustSpin,config.beamDustSpin);gl.uniform1f(u.uDustFlow,config.beamDustFlow);gl.uniform1f(u.uDustOpacity,Math.min(.35,config.beamHelixOpacity));gl.uniform1f(u.uHelixCount,Math.max(2,Math.min(10,Math.round(config.beamHelixCount))));gl.uniform2f(u.uHelixRadii,Math.max(.1,Math.min(config.beamHelixRadiusMin,config.beamHelixRadiusMax)),Math.min(1,Math.max(config.beamHelixRadiusMin,config.beamHelixRadiusMax)));gl.uniform2f(u.uHelixSpeeds,config.beamHelixSpeedMin,config.beamHelixSpeedMax);gl.uniform1f(u.uHelixReverse,Math.max(0,Math.min(1,config.beamHelixReverse)));gl.uniform1f(u.uHelixTurbulence,Math.max(0,Math.min(.012,config.beamHelixTurbulence)));gl.uniform1f(u.uHelixNoiseSpeed,config.beamHelixNoiseSpeed);
+   gl.uniform1f(u.uBandRadius,rings.geometry.radius);gl.uniform1f(u.uBandThickness,rings.geometry.thickness);gl.uniform1f(u.uBandShear,config.bandShear);gl.uniform1f(u.uTime,age);gl.uniform1f(u.uDpr,dpr);
    gl.uniform4fv(u['uTrail[0]'],trail);gl.uniform1f(u.uRadius,config.repulsionRadius/height);gl.uniform1f(u.uRepulsion,config.repulsionForce);
   }
   const api={
@@ -160,7 +181,7 @@ export function createCinemaRenderer(canvas){
     state?.dispose();state=createGpuState(gl,count);reset=true;accumulator=0;lastTime=null;
     const mobile=w<=700,aspect=w/h;
     placement=new Float32Array([mobile?aspect*.02:aspect*.235,mobile?.18:.055,mobile?aspect*1.04:Math.min(1.06,aspect*.75),0]);
-    Object.assign(canvas.dataset,{particleEngine:'gpu-orbital-nucleus',particleCount:String(count),beamMaterial:'continuous-light',ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),pixelRatio:dpr.toFixed(2)});
+    Object.assign(canvas.dataset,{particleEngine:'gpu-orbital-nucleus',particleCount:String(count),beamMaterial:'depth-tested-core',ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),pixelRatio:dpr.toFixed(2)});
    },
    restart(){startTime=null;lastTime=null;reset=true;},
    draw(time,progress=0,trail=emptyTrail,tilt=[0,0]){
@@ -173,21 +194,29 @@ export function createCinemaRenderer(canvas){
     placement[0]=(width<=700?width/height*.02:width/height*.235)+offset[0];placement[1]=baseY-progress*.022+offset[1];
     const ramp=Math.max(0,Math.min(1,(age-config.beamSeconds)/3)),motion=ramp*ramp*(3-2*ramp),scene=interlockedRings(age,tilt,motion),pose=scene.pose;
     rings=scene;center=new Float32Array([placement[0]*(1-pose.depth*.38),placement[1]*(1-pose.depth*.38),pose.depth]);
+    const intro=introState(age);rayEnds=beamEndpoints(pose,placement,intro.beam);rayWorld=beamWorldEndpoints(pose,placement,intro.beam);
     uniforms(simulation,age,trail);const su=simulation.u;
 
     for(const [name,value]of Object.entries({uBandRadius:rings.geometry.radius,uBandThickness:rings.geometry.thickness,uBandHeight:rings.geometry.height,uBandShear:config.bandShear,uTurbulence:config.turbulence,uTurbulenceSpeed:config.turbulenceSpeed,uSpring:config.spring,uDamping:config.damping,uAssemblyDelay:config.assemblyDelay,uAssemblySeconds:config.assemblySeconds,uAspect:width/height,uRecycleWindow:Math.max(1/60,Math.min(.2,elapsed)),uDt:1/60}))gl.uniform1f(su[name],value);
     for(let i=0;i<steps;i++){gl.uniform1f(su.uReset,reset?1:0);state.step();reset=false;}
     accumulator=Math.max(0,accumulator-steps/60);
-    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.DEPTH_TEST);state.bind();
-    uniforms(points,age,trail);const pu=points.u;gl.uniform3fv(pu.uColorA,rgb(config.colorA));gl.uniform3fv(pu.uColorB,rgb(config.colorB));gl.uniform3fv(pu.uActiveColor,rgb(config.activeColor));gl.uniform3fv(pu.uRingColorA,rgb(config.ringColorA));gl.uniform3fv(pu.uRingColorB,rgb(config.ringColorB));
-    const gain=config.brightness*Math.sqrt(40000/count);
-    gl.uniform1f(pu.uSize,config.size*3.6);gl.uniform1f(pu.uGain,gain);gl.drawArrays(gl.POINTS,0,count);
-    const intro=introState(age),ends=beamEndpoints(pose,placement,intro.beam);uniforms(beam,age,trail);
-    gl.uniform4fv(beam.u.uBeamEnds,ends);gl.uniform1f(beam.u.uPulseSpeed,config.beamPulseSpeed);gl.uniform3fv(beam.u.uBeamColor,rgb(config.beamColor));gl.uniform1f(beam.u.uBeamStrength,config.beamStrength);gl.uniform1f(beam.u.uBeamGrowth,intro.beam);
-    gl.enable(gl.SCISSOR_TEST);
-    const left=Math.max(0,Math.floor((Math.min(ends[0],ends[2])*height+width*.5-110)*dpr)),right=Math.min(canvas.width,Math.ceil((Math.max(ends[0],ends[2])*height+width*.5+110)*dpr));
-    gl.scissor(left,0,Math.max(1,right-left),canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.SCISSOR_TEST);
-    gl.disable(gl.BLEND);gl.bindVertexArray(null);
+    gl.depthMask(true);gl.clearDepth(1);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.BLEND);
+    function scissor(padding){const left=Math.max(0,Math.floor((Math.min(rayEnds[0],rayEnds[2])*height+width*.5-padding)*dpr)),right=Math.min(canvas.width,Math.ceil((Math.max(rayEnds[0],rayEnds[2])*height+width*.5+padding)*dpr));gl.enable(gl.SCISSOR_TEST);gl.scissor(left,0,Math.max(1,right-left),canvas.height);}
+    function drawBeam(pass){
+     uniforms(beam,age,trail);gl.bindVertexArray(null);gl.uniform1f(beam.u.uBeamPass,pass);gl.uniform1f(beam.u.uCoreWidth,config.beamCoreWidth);gl.uniform1f(beam.u.uPulseSpeed,config.beamPulseSpeed);gl.uniform3fv(beam.u.uBeamColor,rgb(config.beamColor));gl.uniform1f(beam.u.uBeamStrength,config.beamStrength);gl.uniform1f(beam.u.uBeamGrowth,intro.beam);scissor(pass?config.beamCoreWidth+1:110);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.SCISSOR_TEST);
+    }
+    // Glow is a backdrop. The actual beam core writes the same 3D depth used by points.
+    gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);drawBeam(0);
+    gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);drawBeam(1);
+    gl.depthMask(false);state.bind();uniforms(points,age,trail);const pu=points.u;
+    gl.uniform3fv(pu.uColorA,rgb(config.colorA));gl.uniform3fv(pu.uColorB,rgb(config.colorB));gl.uniform3fv(pu.uActiveColor,rgb(config.activeColor));gl.uniform3fv(pu.uRingColorA,rgb(config.ringColorA));gl.uniform3fv(pu.uRingColorB,rgb(config.ringColorB));
+    const volumeGain=Math.min(1.7,Math.sqrt(rings.geometry.thickness*rings.geometry.height/(.060*.052))),gain=config.brightness*Math.sqrt(40000/count)*volumeGain;
+    gl.uniform1f(pu.uSize,config.size*3.6);gl.uniform1f(pu.uGain,gain);gl.uniform1f(pu.uOcclusion,0);gl.uniform1f(pu.uFrontCoverage,config.bandFrontCoverage);
+    gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.POINTS,0,count);
+    // Only foreground band particles near the ray use coverage blending, so their
+    // solid centers cover the light while the rest retains its additive sparkle.
+    gl.uniform1f(pu.uOcclusion,1);gl.blendFuncSeparate(gl.ONE,gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);scissor(11);gl.drawArrays(gl.POINTS,0,groups.ring);gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.bindVertexArray(null);
     canvas.dataset.particlePhase=intro.text<1?'assembling':'orbiting';canvas.dataset.animationTime=age.toFixed(2);
     if(development){if(fpsStart===null)fpsStart=performance.now();fpsFrames++;const elapsed=performance.now()-fpsStart;if(elapsed>1200){canvas.dataset.fps=(fpsFrames*1000/elapsed).toFixed(1);fpsStart=performance.now();fpsFrames=0;}}
     return intro;
@@ -200,7 +229,8 @@ export function createCinemaRenderer(canvas){
     for(const [key,min,max,step,label]of[['bandRadius',.18,.4,.005,'Radio de banda'],['bandThickness',.025,.14,.005,'Grosor radial'],['bandHeight',.025,.14,.005,'Grosor vertical'],['bandShear',.5,2,.05,'Diferencia de velocidad'],['ringFlowSpeed',.03,.5,.01,'Velocidad de flujo'],['ringGapDegrees',15,60,1,'Apertura de los huecos'],['ringLagA',0,2,.05,'Retraso C azul'],['ringLagB',0,2,.05,'Retraso C violeta'],['ringWobble',0,3,.1,'Bamboleo propio'],['ringBreath',0,.008,.001,'Respiración'],['ringOrientation',20,60,1,'Ángulo del conjunto'],['ringTipFade',.003,.04,.001,'Desvanecer puntas'],['turbulence',0,.08,.001,'Turbulencia'],['turbulenceSpeed',.02,.3,.005,'Ritmo de turbulencia'],['brightness',.2,1.5,.01,'Brillo'],['size',.7,3,.05,'Tamaño'],['beamStrength',.5,3,.05,'Luz central']]){const control=core.add(config,key,min,max,step).name(label);if(key==='ringGapDegrees')control.onFinishChange(refresh);}core.close();
     const gap=gui.addFolder('Flujo del hueco');gap.add(config,'gapDensity',0,.12,.005).name('Densidad relativa').onFinishChange(refresh);gap.add(config,'gapOpacity',.02,.25,.01).name('Opacidad');gap.close();
     const dust=gui.addFolder('Reloj de partículas del rayo');dust.add(config,'beamDustCount',0,5000,100).name('Cantidad escritorio').onFinishChange(refresh);dust.add(config,'mobileBeamDustCount',0,1500,50).name('Cantidad móvil').onFinishChange(refresh);
-    for(const [key,min,max,step,label]of[['beamDustLength',.3,.9,.02,'Largo'],['beamDustWaist',.001,.012,.001,'Radio del centro'],['beamDustEndRadius',.015,.07,.005,'Radio de extremos'],['beamDustSpin',.2,1.5,.05,'Giro'],['beamDustFlow',.015,.09,.005,'Flujo axial'],['beamDustOpacity',.05,.35,.01,'Opacidad']])dust.add(config,key,min,max,step).name(label);dust.close();
+    for(const [key,min,max,step,label]of[['beamDustLength',.3,.9,.02,'Largo'],['beamDustWaist',.001,.012,.001,'Radio del centro'],['beamDustEndRadius',.015,.07,.005,'Radio de extremos'],['beamDustSpin',.2,1.5,.05,'Giro'],['beamDustFlow',.015,.09,.005,'Flujo axial'],['beamHelixOpacity',.05,.35,.01,'Opacidad']])dust.add(config,key,min,max,step).name(label);dust.close();
+    const helices=gui.addFolder('Hélices y profundidad');for(const [key,min,max,step]of[['beamHelixCount',2,10,1],['beamHelixRadiusMin',.1,.6,.02],['beamHelixRadiusMax',.6,1,.02],['beamHelixSpeedMin',.2,1,.05],['beamHelixSpeedMax',1,2,.05],['beamHelixReverse',0,1,.05],['beamHelixTurbulence',0,.012,.001],['beamHelixNoiseSpeed',.05,.5,.01],['bandFrontCoverage',.8,3,.1],['beamCoreWidth',1.5,3.5,.1]])helices.add(config,key,min,max,step);helices.close();
     const movement=gui.addFolder('Reloj de arena');for(const [key,min,max,step]of[['beamCycleSeconds',25,100,1],['beamMaxAngle',5,40,1],['beamDepthAmplitude',.05,.5,.01],['beamPulseSpeed',.05,.4,.005]])movement.add(config,key,min,max,step);movement.close();
     const sensor=gui.addFolder('Inclinación móvil');for(const [key,min,max,step]of[['gyroRange',10,40,1],['gyroMaxDisplacement',5,30,1],['gyroSmoothing',.1,.8,.01],['gyroMaxTilt',0,5,.25],['gyroBackPixels',0,12,1],['gyroCorePixels',0,20,1],['gyroFrontPixels',0,25,1],['gyroAuroraPixels',0,8,1]])sensor.add(config,key,min,max,step);sensor.close();
     const aurora=gui.addFolder('Aurora');for(const [key,min,max,step]of[['auroraIntensity',0,.3,.01],['auroraSpeed',.005,.08,.005],['auroraNoiseScale',.8,4,.1],['auroraCurtains',1,4,1],['auroraScroll',0,1,.05],['auroraPointer',0,1.5,.05]])aurora.add(config,key,min,max,step);for(const key of ['auroraColorA','auroraColorB','auroraColorC','auroraColorD'])aurora.addColor(config,key);aurora.add(config,'auroraResolution',.2,.5,.05).onFinishChange(refresh);aurora.add(config,'auroraMobileResolution',.2,.4,.02).onFinishChange(refresh);aurora.close();

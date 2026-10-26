@@ -19,7 +19,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 // For any pair of centerline points with distance D, both local distances
 // are <= D, so their radii sum to at most 2 * clearanceFraction * D < D.
 export function interlockGeometry(settings=config){
- const radius=clamp(settings.bandRadius,.12,.5),thickness=clamp(settings.bandThickness,.012,radius*.22),height=clamp(settings.bandHeight,.012,radius*.22);
+ const radius=clamp(settings.bandRadius,.12,.5),thickness=clamp(settings.bandThickness,.012,radius*.32),height=clamp(settings.bandHeight,.012,radius*.32);
  const tube=1.12*Math.max(thickness,height)+Math.min(settings.turbulence,.08)*.2,margin=radius*.008;
  const gap=clamp(settings.ringGapDegrees,15,150)*Math.PI/180,clearanceFraction=clamp(settings.ringClearance,.28,.42);
  const nearest=2*radius*Math.sin(gap/4),clearance=(1-2*clearanceFraction)*nearest-margin;
@@ -51,7 +51,11 @@ export function interlockedRings(time,tilt=[0,0],blend=1){
 }
 export function projectPoint(p){const scale=1/Math.max(.55,1-p[2]*.38);return [p[0]*scale,p[1]*scale];}
 export function beamEndpoints(pose,placement,growth=1){
- const center=[placement[0]*(1-pose.depth*.38),placement[1]*(1-pose.depth*.38),pose.depth],extent=placement[2]*.49*growth;
- const a=projectPoint(center.map((v,i)=>v+pose.direction[i]*extent)),b=projectPoint(center.map((v,i)=>v-pose.direction[i]*extent));
+ const [a,b]=beamWorldEndpoints(pose,placement,growth).map(projectPoint);
  return new Float32Array([...a,...b]);
 }
+export function beamWorldEndpoints(pose,placement,growth=1){
+ const center=[placement[0]*(1-pose.depth*.38),placement[1]*(1-pose.depth*.38),pose.depth],extent=placement[2]*.49*growth;
+ return [center.map((v,i)=>v+pose.direction[i]*extent),center.map((v,i)=>v-pose.direction[i]*extent)];
+}
+export function projectedDepth(z){const distance=1/.38-z;return 10/9.9-1/(9.9*distance);}

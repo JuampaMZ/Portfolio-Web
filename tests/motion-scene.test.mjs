@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PARTICLE_CONFIG as config} from '../js/particle-config.js';
-import {beamPose,bandBasis,beamEndpoints,interlockGeometry,interlockedRings,ringTubeScale} from '../js/particle-motion.js';
+import {beamPose,bandBasis,beamEndpoints,interlockGeometry,interlockedRings,ringTubeScale,beamWorldEndpoints,projectPoint,projectedDepth} from '../js/particle-motion.js';
 import {isMobileSensorDevice,relativeTilt,tiltOffset,createDeviceTilt} from '../js/particle-orientation.js';
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0),distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 
@@ -48,7 +48,7 @@ test('both thick C tubes retain clearance across hourglass motion, independent l
 test('local necks retain clearance at narrow openings and limit excessive tube and wobble settings',()=>{
  for(const radius of [.18,.3,.4]){
   const g=interlockGeometry({...config,bandRadius:radius,bandThickness:.14,bandHeight:.14,ringGapDegrees:15,ringBreath:.1});
-  assert.ok(g.thickness<=radius*.22);assert.ok(g.height<=radius*.22);
+  assert.ok(g.thickness<=radius*.32);assert.ok(g.height<=radius*.32);
   assert.ok((1-2*g.clearanceFraction)*g.nearest-2*g.breath-2*(radius+g.tube+g.breath)*Math.sin(g.maxRotation)>=g.margin-1e-8);
  }
 });
@@ -85,8 +85,15 @@ test('denial, unavailable sensors, Android and desktop retain a safe non-sensor 
  const absent=new EventTarget(),fallback=createDeviceTilt({win:absent,nav:{userAgent:'iPhone'},now:()=>0});assert.equal(fallback.status,'unsupported');fallback.dispose();
 });
 
-test('the C opening is 15–20 degrees and the necks preserve the volume away from both crossings',()=>{
- const g=interlockGeometry();assert.ok(g.gap*180/Math.PI>=15&&g.gap*180/Math.PI<=20);
+test('the C opening adjusts to the 40% wider bands and the necks preserve the volume away from both crossings',()=>{
+ const g=interlockGeometry();assert.ok(g.gap*180/Math.PI>=23&&g.gap*180/Math.PI<=27);
  assert.ok(ringTubeScale(g.gap/2,0,g)<.35);assert.ok(ringTubeScale(Math.PI,0,g)<.35);
  assert.equal(ringTubeScale(Math.PI/2,0,g),1);assert.equal(ringTubeScale(Math.PI*1.5,1,g),1);
+});
+test('beam endpoints and point depth share the same perspective throughout the hourglass cycle',()=>{
+ for(const t of [5,17.5,30,42.5]){
+  const pose=beamPose(t),placement=[.4,.05,1,0],world=beamWorldEndpoints(pose,placement),ends=beamEndpoints(pose,placement);
+  world.forEach((p,index)=>assert.ok(distance(projectPoint(p),[...ends.slice(index*2,index*2+2)])<1e-6));
+  assert.ok(projectedDepth(pose.depth+.18)<projectedDepth(pose.depth));assert.ok(projectedDepth(pose.depth-.18)>projectedDepth(pose.depth));
+ }
 });

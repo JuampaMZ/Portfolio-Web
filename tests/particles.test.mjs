@@ -46,3 +46,10 @@ test('the axial hourglass and fine gap thread stay inside the mobile and desktop
  assert.ok(nucleusGroups(10000,390).dust<nucleusGroups(32000,1440).dust);
  const without=nucleusGroups(32000,1440,{}, {...PARTICLE_CONFIG,gapDensity:0});assert.equal(without.gap,0);
 });
+
+test('the wider bands retain particle density within five percent on desktop and mobile',()=>{
+ const area=(PARTICLE_CONFIG.bandThickness/.060)*(PARTICLE_CONFIG.bandHeight/.052);
+ assert.ok(area>1.9&&area<2.1);
+ for(const [width,previousRing]of [[1440,29761],[390,9238]]){const now=nucleusGroups(particleBudget(width),width);assert.ok(Math.abs(now.ring/previousRing/area-1)<.05);}
+ assert.ok(PARTICLE_CONFIG.beamHelixCount>=4);assert.ok(PARTICLE_CONFIG.beamHelixRadiusMin<PARTICLE_CONFIG.beamHelixRadiusMax);assert.ok(PARTICLE_CONFIG.beamHelixReverse>0&&PARTICLE_CONFIG.beamHelixReverse<1);
+});

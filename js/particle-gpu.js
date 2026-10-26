@@ -22,6 +22,17 @@ vec3 pointerForce(vec3 p){
  return force/max(1.,total);
 }
 `;
+export const nucleusProjection=`
+float sceneDepth(float z){return 10./9.9-1./(9.9*(1./.38-z));}
+vec4 scenePosition(vec3 p,vec2 resolution){
+ float w=max(.55,1.-p.z*.38);
+ return vec4(p.x*2.*resolution.y/resolution.x,p.y*2.,(sceneDepth(p.z)*2.-1.)*w,w);
+}
+uniform vec4 uBeamEnds;uniform vec3 uBeamWorldA,uBeamWorldB;
+float beamFraction(vec2 screen){vec2 d=uBeamEnds.zw-uBeamEnds.xy;return clamp(dot(screen-uBeamEnds.xy,d)/max(dot(d,d),.000001),0.,1.);}
+float beamWorldDepth(float t){float a=(1.-t)/(1.-uBeamWorldA.z*.38),b=t/(1.-uBeamWorldB.z*.38);return (a*uBeamWorldA.z+b*uBeamWorldB.z)/max(a+b,.000001);}
+float beamDistance(vec2 screen,float t){return length(screen-mix(uBeamEnds.xy,uBeamEnds.zw,t));}
+`;
 export const fullscreenVertex=`#version 300 es
 void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`;
 export const emptyFragment=`#version 300 es
