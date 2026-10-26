@@ -1,15 +1,15 @@
 // Todos los controles del núcleo, la galaxia y la interacción viven aquí.
 export const PARTICLE_CONFIG={
  count:60000,mobileCount:19000,maxDpr:2,
- size:1.65,brightness:.85,colorA:'#355462',colorB:'#627183',activeColor:'#64dfff',
- beamColor:'#80d1ff',beamStrength:1.7,beamSeconds:1.7,assemblyDelay:.65,assemblySeconds:2.8,textDelay:3.55,textSeconds:1.05,
+ size:1.65,brightness:.85,particleColor:'#ffffff',particleIntensity:1.04,ringPointScale:.90,
+ beamCoreColor:'#efffe6',beamColor:'#39ff14',beamGlowColor:'#7cff3a',beamDustColor:'#97d878',beamCoreStart:.94,
+ beamStrength:1.7,beamSeconds:1.7,assemblyDelay:.65,assemblySeconds:2.8,textDelay:3.55,textSeconds:1.05,
  ringFlowSpeed:.21,
  bandRadius:.30,bandThickness:.084,bandHeight:.0728,bandShear:1.5,
  ringGapDegrees:25,ringTipFade:.008,ringClearance:.40,gapDensity:.025,gapOpacity:.12,
  cameraFov:48,cameraDistance:1.12,beamLength:1.24,beamWorldRadius:.0055,beamSegments:48,bloomStrength:.14,bloomRadius:.12,bloomThreshold:1.1,bloomResolution:.5,bloomMobileResolution:.35,
  ringLagA:.65,ringLagB:1.05,ringWobble:1.4,ringBreath:.003,ringOrientation:58,
  beamDustCount:2200,mobileBeamDustCount:750,beamDustLength:.84,beamDustWaist:.006,beamDustEndRadius:.045,beamDustSpin:.8,beamDustFlow:.045,beamDustOpacity:.20,
- ringColorA:'#62849a',ringColorB:'#8685a9',
  beamCycleSeconds:50,beamMaxAngle:45,beamDepthAmplitude:.30,beamPulseSpeed:.215,turbulenceSpeed:.115,
  turbulence:.022,
  spring:52,damping:12,repulsionRadius:100,repulsionForce:4.0,trailSeconds:1.15,trailCapacity:8,
