@@ -6,7 +6,7 @@ document.querySelector('button').onclick=async()=>{
  const kinds=['Buffer','Texture','Framebuffer','Renderbuffer','VertexArray','TransformFeedback','Program','Shader'],resources=new Map(kinds.map(k=>[k,new Set()])),originals=[];
  for(const kind of kinds){for(const verb of ['create','delete']){const name=verb+kind,original=gl[name].bind(gl);originals.push([name,original]);gl[name]=(...args)=>{const value=original(...args);if(verb==='create')resources.get(kind).add(value);else resources.get(kind).delete(args[0]);return value;};}}
  try{
-  core=createMeshCore(canvas,{inspection:true,debug:true});assert(!!core,'Renderer y shaders creados');core.resize(800,500);core.draw(0);const inspector=core.inspect;
+  core=createMeshCore(canvas,{inspection:true,debug:true});assert(!!core,'Renderer y shaders creados');core.resize(800,500);await core.prepare();assert(canvas.dataset.gpuReady==='ready','Precompilación y ambos slots GPU preparados');core.draw(0);const inspector=core.inspect;
   const sample=(offset=0,n=256)=>{const v=new Float32Array(n*3);gl.bindBuffer(gl.ARRAY_BUFFER,inspector.state.position);gl.getBufferSubData(gl.ARRAY_BUFFER,offset*12,v);gl.bindBuffer(gl.ARRAY_BUFFER,null);return v;},dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
   const start=sample();for(let i=1;i<=300;i++){core.draw(i/60,0,empty);if(i%30===0)await new Promise(requestAnimationFrame);}const assembled=sample();
   assert(dist(start,assembled)>.1&&canvas.dataset.particlePhase==='orbiting','Ensamblado gradual hasta las órbitas');

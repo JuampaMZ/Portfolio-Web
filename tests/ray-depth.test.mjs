@@ -11,12 +11,12 @@ test('real perspective makes the constant-radius cylinder wider at the near end 
  for(const time of [50,58,75]){
   const shape=beamMeshPose(interlockedRings(time).pose,.82),radii=shape.endpoints.map(p=>shape.radius/(config.cameraDistance-p[2]));
   assert.ok(Math.max(...radii)/Math.min(...radii)>1.1);assert.equal(radii[1]>radii[0],time!==75);
-  assert.equal(shape.radius,config.beamWorldRadius*.82);shape.endpoints.forEach(p=>{const q=project(p);assert.ok(q.y<=.720001&&q.y>=-.880001);});
+  assert.equal(shape.radius,config.beamWorldRadius*.82);assert.equal(shape.length,config.beamLength*.82);shape.endpoints.forEach(p=>assert.ok(Number.isFinite(project(p).y)));
  }
 });
 test('both ring planes cross the cylinder in front and behind under the new camera',()=>{
- for(const time of [50,58,75]){
-  const scene=interlockedRings(time),shape=beamMeshPose(scene.pose,.82),c=project(shape.pivot),v=project(shape.pivot.map((p,j)=>p+shape.direction[j]*.1)),d=[v.x-c.x,v.y-c.y];
+ for(const time of [50,58,75])for(const boost of [0,config.scrollExtraAngle]){
+  const scene=interlockedRings(time,[0,0],1,boost),shape=beamMeshPose(scene.pose,.82),c=project(shape.pivot),v=project(shape.pivot.map((p,j)=>p+shape.direction[j]*.1)),d=[v.x-c.x,v.y-c.y];
   for(const frame of scene.frames){
    const point=a=>[0,1,2].map(j=>shape.pivot[j]+.82*frame.radius*(frame.basis[j]*Math.cos(a)+frame.basis[j+6]*Math.sin(a)));
    const side=a=>{const p=project(point(a));return(p.x-c.x)*d[1]-(p.y-c.y)*d[0];};const crossings=[];

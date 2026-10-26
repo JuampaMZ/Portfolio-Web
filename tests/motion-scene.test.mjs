@@ -12,7 +12,7 @@ test('hourglass cycle closes smoothly, pivots in depth, and respects its angle b
  for(let i=0;i<=200;i++){
   const p=beamPose(i/200*period);assert.ok(Math.abs(Math.hypot(...p.direction)-1)<1e-8);
   assert.ok(Math.acos(p.direction[1])*180/Math.PI<=config.beamMaxAngle+.00001);
-  near||=p.depth>.1;far||=p.depth<-.1;left||=p.direction[0]<-.2;right||=p.direction[0]>.2;
+  assert.equal(p.depth,0);near||=p.direction[2]>.4;far||=p.direction[2]<-.4;left||=p.direction[0]<-.2;right||=p.direction[0]>.2;
  }
  assert.ok(near&&far&&left&&right);
  const e=.0001,l=beamPose(period-e),r=beamPose(e);assert.ok(distance(l.direction,r.direction)<.001);

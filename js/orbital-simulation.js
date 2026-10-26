@@ -74,7 +74,9 @@ void main(){
   float t=clamp((uTime-start)/max(.1,finish-start),0.,1.);float ease=t*t*t*(t*(t*6.-15.)+10.);
   float spiral=(1.-ease)*sin(t*3.14159265)*2.;
   dispersed.xy=mat2(cos(spiral),-sin(spiral),sin(spiral),cos(spiral))*dispersed.xy;
-  nextPosition=mix(dispersed,target,ease);nextVelocity=vec3(0.);
+  nextPosition=mix(dispersed,target,ease);
+  // Carry the actual assembly velocity into the spring phase instead of stopping it at the seam.
+  nextVelocity=uReset>.5?vec3(0.):(nextPosition-aPosition)/max(.001,uDt);nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
  }// Recycle only while both tips are invisible; never integrate across the gap.
  else if(uReset>.5||((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5)){nextPosition=target;nextVelocity=vec3(0.);}
  else{

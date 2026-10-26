@@ -22,7 +22,8 @@
 .cinema-fallback{background:radial-gradient(ellipse at 70% 45%,#284b3c80,transparent 50%),#04080d;overflow:hidden}.cinema-fallback img{position:absolute;left:62%;top:20%;height:56%;width:auto;filter:drop-shadow(0 0 35px #a7d7bc33);transform:perspective(800px) rotateY(-14deg)}.has-renderer .cinema-fallback{visibility:hidden}
 .scroll-enhanced .cinema{height:290svh;min-height:0}.scroll-enhanced .cinema-sticky{position:sticky;top:0;min-height:0}
 .scroll-enhanced .cinema-act{opacity:var(--act-opacity,0);transform:translate3d(0,var(--act-y,0px),0);filter:blur(var(--act-blur,0px))}
-.scroll-enhanced .cinema-line>span{transform:translate3d(0,var(--line-y,0%),0) rotateX(var(--line-rotate,0deg))}
+.scroll-enhanced .cinema-line>span{transform:translate3d(0,calc(var(--line-y,0%) + var(--intro-line-y,0px)),0) rotateX(var(--line-rotate,0deg));opacity:var(--intro-line-opacity,1);filter:blur(var(--intro-line-blur,0px))}
+.cinema.is-preparing .cinema-fallback{visibility:hidden}
 .cinema-act[aria-hidden=true] .cinema-work{pointer-events:none;visibility:hidden}
 .header{transition:background .4s,border-color .4s,backdrop-filter .4s}.header.cinema-header{background:linear-gradient(#04080dbb,#04080d00);border-bottom-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}.header.cinema-header:has(nav.is-open){background:#101723}
 .header::after{content:"";height:2px;position:absolute;left:0;bottom:0;width:var(--page-progress,0%);background:#b7d7a8;pointer-events:none;opacity:.65}

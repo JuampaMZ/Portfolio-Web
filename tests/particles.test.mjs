@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {PARTICLE_CONFIG,particleBudget,layerBudget,galaxySmallBudget,nucleusGroups,introState} from '../js/particle-config.js';
 import {createParticleInput} from '../js/particle-input.js';
 
-test('the beam starts first, assembly finishes before the text entrance, and all phases finish',()=>{
+test('the calm 3.9s assembly overlaps the gradual text entrance and both finish together',()=>{
  const c=PARTICLE_CONFIG;
  assert.deepEqual(introState(0),{beam:0,assembly:0,text:0});
  assert.ok(introState(c.assemblyDelay*.7).beam>0);assert.equal(introState(c.assemblyDelay*.7).assembly,0);
- const assembled=introState(c.assemblyDelay+c.assemblySeconds);assert.equal(assembled.assembly,1);assert.equal(assembled.text,0);
+ const assembled=introState(c.assemblyDelay+c.assemblySeconds);assert.equal(assembled.assembly,1);assert.equal(assembled.text,1);
+ assert.ok(c.assemblyDelay+c.assemblySeconds>=3.5&&c.assemblyDelay+c.assemblySeconds<=4);
+ assert.ok(introState(2).assembly>0&&introState(2).assembly<1&&introState(2).text>0&&introState(2).text<1);
  assert.deepEqual(introState(20),{beam:1,assembly:1,text:1});
  for(let i=1;i<60;i++)for(const key of ['beam','assembly','text'])assert.ok(introState(i/10)[key]>=introState((i-1)/10)[key]);
 });

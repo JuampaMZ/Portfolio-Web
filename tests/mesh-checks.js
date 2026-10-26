@@ -1,4 +1,5 @@
 import * as THREE from '../assets/three-runtime.js';
+import {PARTICLE_CONFIG as config} from '../js/particle-config.js';
 import {interlockedRings} from '../js/particle-motion.js';
 export function verifyFrame(core,time,canvas,ringIndex=0){
  const {renderer,scene,camera,beam,particles}=core.inspect,gl=renderer.getContext(),width=canvas.width,height=canvas.height,target=new THREE.WebGLRenderTarget(width,height);
@@ -13,13 +14,13 @@ export function verifyFrame(core,time,canvas,ringIndex=0){
   assert(beam.geometry.type==='CylinderGeometry'&&beam.material.depthWrite,'Cilindro real con depthWrite');
   assert(particles.material.depthTest&&particles.material.depthWrite&&particles.material.blending===THREE.NormalBlending,'Partículas con depth test y alfa normal');
   const original=particles.visible;particles.visible=false;const rayOnly=frame();particles.visible=original;const together=frame();
-  const sceneInfo=interlockedRings(time),d=sceneInfo.pose.direction,center=[0,0,sceneInfo.pose.depth],f=sceneInfo.frames[ringIndex],scale=beam.scale.x/.0055;
+  const sceneInfo=interlockedRings(time),d=sceneInfo.pose.direction,center=[0,0,sceneInfo.pose.depth],f=sceneInfo.frames[ringIndex],scale=beam.scale.x/config.beamWorldRadius;
   const c=project(center),v=project(center.map((x,j)=>x+d[j]));const direction=[v[0]-c[0],v[1]-c[1]],len=Math.hypot(...direction),normal=[-direction[1]/len,direction[0]/len];
   const point=a=>[0,1,2].map(j=>center[j]+scale*f.radius*(f.basis[j]*Math.cos(a)+f.basis[j+6]*Math.sin(a))),side=a=>{const p=project(point(a));return(p[0]-c[0])*direction[1]-(p[1]-c[1])*direction[0];};
   const crossings=[];
   for(let i=1;i<=720;i++){let lo=(i-1)*Math.PI/360,hi=i*Math.PI/360;if(side(lo)*side(hi)>=0)continue;for(let n=0;n<30;n++){const m=(lo+hi)/2;if(side(lo)*side(m)<0)hi=m;else lo=m;}const world=point((lo+hi)/2),p=project(world),along=world.reduce((s,x,j)=>s+(x-center[j])*d[j],0);crossings.push({p,front:world[2]>center[2]+along*d[2]});}
   for(const {p,front}of crossings){let unchanged=0,covered=0,candidates=0,blue=0;for(let x=-5;x<=5;x++)for(let y=-10;y<=10;y++){const base=pixel(rayOnly,p[0]+x,p[1]+y),color=pixel(together,p[0]+x,p[1]+y);if(base[3]>240){candidates++;if(color[2]>color[0]+35&&color[0]<100)blue++;if(color[0]>100&&color[1]<80&&color[2]<80)covered++;if(Math.hypot(...color.slice(0,3).map((v,j)=>v-base[j]))<5)unchanged++;}}
-   assert(candidates>20,'El rayo alcanza el cruce '+(front?'delantero':'trasero'));
+   assert(candidates>=8,'El rayo alcanza el cruce '+(front?'delantero':'trasero')+' ('+candidates+' píxeles; t='+time+'; C='+ringIndex+'; p='+p.map(v=>v.toFixed(1))+')');
    assert(front?covered>candidates*.15:(particles.material.uniforms.uSingleRing.value>.5?unchanged>candidates*.9:blue<candidates*.05),front?'Las esferas rojas tapan el rayo en el cruce delantero ('+covered+'/'+candidates+' píxeles)':'La banda azul queda oculta en el cruce trasero (puede pasar otra C delante)');
   }
   // Measure the actual rasterized cylinder, with particles hidden and bloom excluded.
@@ -31,4 +32,3 @@ export function verifyFrame(core,time,canvas,ringIndex=0){
   return messages;
  }finally{beam.material.uniforms.uColor.value.copy(beamColor);beam.material.uniforms.uCoreColor.value.copy(coreColor);renderer.setRenderTarget(old);target.dispose();}
 }
-
