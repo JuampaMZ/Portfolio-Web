@@ -4,31 +4,34 @@ Portfolio en español de desarrollo de software, análisis de datos y experienci
 
 ## Desarrollo
 
-Node.js 20 o posterior. `npm run dev` inicia http://127.0.0.1:4173. `npm run check` comprueba diez módulos, `npm test` verifica geometría, entrada, presupuestos e interacción de las partículas, y `npm run build` prepara `dist/` con una lista explícita de recursos públicos.
+Node.js 20 o posterior. `npm run dev` inicia http://127.0.0.1:4173. `npm run check` comprueba trece módulos, `npm test` verifica geometría, entrada, presupuestos e interacción de las partículas, y `npm run build` prepara `dist/` con una lista explícita de recursos públicos.
 
 El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni demostraciones retiradas. Los archivos históricos se conservan en el repositorio.
 
-## Núcleo orbital y galaxia en GPU
+## Banda de acreción, rayo 3D y aurora
 
-La entrada enciende el rayo progresivamente, ensambla partículas dispersas en las órbitas y revela los textos al terminar el ensamblado. Por defecto el rayo tarda 1,7 s; las partículas llegan entre 0,65 y 3,45 s; el texto aparece de 3,55 a 4,6 s. La navegación permanece disponible desde el inicio. Un resize conserva el avance de la entrada.
+Se conserva la entrada escalonada: el rayo aparece lentamente, las partículas se unen y después se revelan los textos. Las velocidades orbitales, de nube, deriva y parpadeo se reducen aproximadamente a la mitad.
 
-El núcleo tiene 32.000 partículas en escritorio y 10.000 en móvil. Cuatro anillos con radios, inclinaciones, ejes y velocidades diferentes rodean el rayo fijo. Una nube volumétrica gira con curl noise analítico. Ciclos individuales de duración y fase distintas hacen que grupos entren en espiral y salgan para reincorporarse. El rayo tiene un shader óptico independiente, halo y pulso suave.
+El núcleo usa 32.000 partículas en escritorio y 10.000 en móvil. La banda es un toroide con sección radial y vertical, muestreo gaussiano más denso en el centro y bordes difusos. El 86% de las partículas forma la banda, con mayor brillo central. La velocidad angular depende del radio: las interiores giran más rápido. El resto forma una nube turbulenta y conserva ciclos de entrada y salida.
 
-Todas las posiciones y velocidades se integran en GPU mediante WebGL 2 Transform Feedback y buffers alternados. Los destinos orbitales cambian con el tiempo; una fuerza de resorte amortiguada permite perturbaciones y retorno continuo a esas trayectorias móviles. Las semillas se generan en el shader. No hay bucles por partícula ni lectura de sus estados en JavaScript durante la producción.
+El rayo pivota en un ciclo cerrado de 50 segundos, con inclinación máxima de 28 grados y movimiento en profundidad. Su centro proyectado permanece estable. La base de la banda es perpendicular al eje del rayo evaluado con 0,85 segundos de retraso; la integración física aporta inercia adicional. El shader de la luz es independiente de las partículas. Las posiciones, velocidades y perturbaciones se integran en GPU con Transform Feedback, sin recorridos por partícula en JS.
 
-La galaxia usa 1.800 partículas de fondo y 24 cercanas; en móvil se reduce a 600 y 8, también en dispositivos con puntero táctil de mayor ancho. El canvas trasero es fijo y tiene z-index negativo dentro del contexto aislado del body. El frontal tiene pointer-events desactivados, baja opacidad y puntos grandes desenfocados. Una distribución por celdas y máscaras calculadas sobre los textos limitan la superposición. Hay deriva, parpadeo lento, parallax por profundidad y nebulosas muy tenues.
+El campo galáctico fijo cubre toda la página: 2.200 estrellas de fondo y 24 cercanas; en móvil se usan 700 y 8. El fondo tiene z-index negativo en un body aislado y el frente tiene pointer-events desactivados, baja opacidad, distribución por celdas y máscaras sobre los textos. Mouse y touch provocan repulsión con inercia y retorno a sus rutas. Los eventos son pasivos y se mantiene touchmove para la estela durante scroll nativo.
 
-- js/particle-config.js centraliza todos los parámetros: cantidades por capa, radios, velocidades, inclinaciones, colores, opacidades, interacción y tiempos de entrada.
-- js/cinema-renderer.js dibuja y simula el núcleo y su rayo; su panel lil-gui solo se importa en desarrollo.
-- js/atmosphere.js simula las estrellas en GPU, protege los textos y administra las capas y nebulosas.
-- js/particle-gpu.js comparte matemáticas, programas y buffers de simulación con limpieza explícita.
-- js/particle-input.js mantiene hasta ocho muestras de puntero. Mouse y dedo comparten el campo de repulsión; una estela decae tras retirar el dedo. Los listeners son pasivos, con touchmove como continuidad del gesto cuando el navegador toma el scroll nativo. No se captura el puntero ni se bloquea el desplazamiento.
-- js/scroll-story.js coordina la entrada, los textos y el scroll, y devuelve la función de desmontaje.
-- js/environment.js tiene un indicador explícito que el build cambia a false. El panel y las pruebas no se copian a producción.
+La aurora es otro canvas debajo de las estrellas, generado con un fragment shader de ruido fBm de cuatro octavas y hasta cuatro cortinas. Ondula de forma autónoma; el scroll suavizado cambia su posición, orientación y paleta entre verde, turquesa, violeta y azul. El puntero genera una ondulación local y las máscaras reducen su intensidad detrás del texto. Se renderiza por defecto a 25% de resolución CSS en escritorio y 22% en móvil, configurable hasta media resolución, y se escala suavemente. No usa imágenes ni videos.
 
-El núcleo y la galaxia se animan autónomamente aunque no haya scroll, interacción o estén fuera de la portada. El efecto no tiene botón de pausa ni pausa por preferencias de movimiento. Solo se suspende su render cuando document.hidden es verdadero; al volver se conserva el tiempo de simulación. El resto de controles del prisma pertenece a sus proyectos y conserva su funcionamiento.
+El giroscopio solo se activa en dispositivos móviles detectados. Toma la primera orientación válida como referencia, aplica límites y un filtro temporal. El frente se desplaza más que el núcleo, el fondo y la aurora. La inclinación también se suma al ciclo del rayo, sin reemplazarlo. En iOS, requestPermission se invoca dentro del primer gesto táctil válido; no hay botones ni diálogos propios. Android escucha directamente. Si falta el sensor o se rechaza el permiso, el efecto conserva su movimiento normal. Se recalibra al rotar la pantalla. Las pruebas de sensor son simuladas; requieren confirmación adicional en un teléfono físico.
 
-El DPR nunca supera 2; se limita además la superficie de render y se dibuja la luz dentro de un rectángulo estrecho para evitar sombrear toda la pantalla. El objetivo es 60 fps, según el hardware. Sin WebGL 2 permanece el logo como alternativa. Al desmontar se abortan listeners, se cancelan RAF, se desconectan observadores y se eliminan canvas, nebulosas, programas, shaders, buffers, VAO y transform feedback.
+- js/particle-config.js centraliza cantidades, densidad, radios, espesores, velocidades, ciclo 3D, inclinación, colores, opacidades y parámetros de aurora.
+- js/cinema-renderer.js simula la banda, dibuja la luz y ofrece el panel lil-gui solo en desarrollo. Un solo pase de puntos combina centro y halo.
+- js/particle-motion.js calcula el eje, la base ortogonal y la proyección del rayo.
+- js/particle-orientation.js controla permisos, referencia, suavizado y limpieza del sensor.
+- js/atmosphere.js administra las capas, máscaras y el scroll suavizado.
+- js/aurora-renderer.js crea la aurora con resolución reducida.
+- js/particle-gpu.js comparte programas, buffers y fuerzas; js/particle-input.js mantiene una estela acotada de puntero.
+- js/scroll-story.js conserva la secuencia y la navegación; js/environment.js excluye el panel de producción.
+
+La animación continúa sin scroll ni interacción y fuera de la portada. Solo se suspende al ocultar la pestaña. Al desmontar se abortan listeners, permisos pendientes quedan sin efecto, se cancelan RAF y se liberan observadores, canvas, programas, shaders, buffers, VAO y transform feedback. El DPR está limitado a 2 y el rayo usa recorte de render para reducir costo. Sin WebGL 2 se conserva la alternativa gráfica.
 
 ## Contenido y proyectos
 
@@ -42,9 +45,9 @@ El giro automático es lento; el centro del cursor lo detiene y los bordes aumen
 
 ## Validación
 
-Las 9 pruebas de Node cubren prisma, transiciones, secuencia de entrada, presupuestos de escritorio y móvil, listeners pasivos, estela táctil y limpieza de la entrada. Con npm run dev, tests/gpu-preview.html ejecuta 22 comprobaciones reales de GPU: movimiento autónomo, perturbación con inercia, recuperación de órbitas móviles, rayo independiente, resize sin reiniciar la entrada, valores finitos, galaxia y liberación completa de recursos. Solo esa página lee muestras de buffers para verificar resultados; no se publica.
+Las 14 pruebas de Node cubren navegación y prisma, entrada, presupuestos, estela táctil pasiva, ciclo 3D cerrado, bases ortogonales, pivote estable, detección móvil, referencia relativa, límites y suavizado, permiso iOS, rechazo y ausencia de sensor. La página local tests/gpu-preview.html verifica GPU, volumen de la banda, autonomía, perturbación y retorno, rayo, aurora visible, cambio con tiempo y scroll, ondulación, máscaras, resolución reducida y liberación de recursos. Sus lecturas de buffers solo existen en las pruebas y no se publican.
 
-La revisión visual verifica escritorio, móvil, legibilidad del perfil y continuidad del reloj del núcleo al navegar fuera de la portada. El navegador local rondó los 60 fps con la configuración por defecto; el rendimiento de un teléfono físico requiere medir en ese dispositivo.
+La revisión manual comprueba consola, interacción fuera del núcleo, distintas secciones y viewport móvil. Un viewport no valida un giroscopio físico ni la presentación real del permiso de Safari. El rendimiento depende del hardware y de cuántas escenas se estén renderizando simultáneamente.
 
 ## Publicación
 

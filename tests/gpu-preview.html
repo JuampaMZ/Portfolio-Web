@@ -4,6 +4,8 @@
 <script type="module">
 import {createCinemaRenderer} from '../js/cinema-renderer.js';
 import {initAtmosphere,createGalaxyRenderer} from '../js/atmosphere.js';
+import {createAuroraRenderer} from '../js/aurora-renderer.js';
+import {beamPose,bandBasis} from '../js/particle-motion.js';
 import {PARTICLE_CONFIG as config,introState} from '../js/particle-config.js';
 const output=document.querySelector('pre'),host=document.querySelector('#canvases');
 function tracked(){
@@ -17,28 +19,36 @@ function tracked(){
  }
  let latest=null;const draw=gl.drawArrays.bind(gl);
  gl.drawArrays=(...args)=>{if(!gl.isEnabled(gl.RASTERIZER_DISCARD))latest=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);return draw(...args);};
- return {canvas,gl,resources,sample(){const data=new Float32Array(64*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
+ return {canvas,gl,resources,sample(){const data=new Float32Array(256*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
 }
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
-document.querySelector('button').addEventListener('click',()=>{
+document.querySelector('button').addEventListener('click',async()=>{
+ output.textContent='Ejecutando comprobaciones GPU…';await new Promise(requestAnimationFrame);
  const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
- const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null;const oldRadius=config.repulsionRadius;
+ const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null;const oldRadius=config.repulsionRadius;
  try{
   control=createCinemaRenderer(a.canvas);perturbed=createCinemaRenderer(b.canvas);assert(Boolean(control&&perturbed),'Shaders de órbitas y nube compilados');
   control.resize(800,500);perturbed.resize(800,500);const empty=new Float32Array(32);
   control.draw(0,0,empty);perturbed.draw(0,0,empty);const start=a.sample(),startBeam=a.beam();
-  for(let i=1;i<=300;i++){control.draw(i/60,0,empty);perturbed.draw(i/60,0,empty);}
-  const assembled=a.sample();assert(dist(start,assembled)>.1,'Ensamblado gradual desde posiciones dispersas');
+  for(let i=1;i<=300;i++){control.draw(i/60,0,empty);perturbed.draw(i/60,0,empty);if(i%60===0)await new Promise(requestAnimationFrame);}
+  // Present in the current task before reading a non-preserved drawing buffer.
+  control.draw(5,0,empty);perturbed.draw(5,0,empty);const assembled=a.sample();
+  const pose=beamPose(5),matrix=bandBasis(beamPose(5-config.bandLag).direction),center=[.376*(1-pose.depth*.38),.055*(1-pose.depth*.38),pose.depth],radial=[],vertical=[];
+  for(let i=0;i<assembled.length;i+=6){
+   const p=[0,1,2].map(j=>(assembled[i+j]-center[j])/1.06),x=matrix[0]*p[0]+matrix[1]*p[1]+matrix[2]*p[2],y=matrix[3]*p[0]+matrix[4]*p[1]+matrix[5]*p[2],z=matrix[6]*p[0]+matrix[7]*p[1]+matrix[8]*p[2],r=Math.hypot(x,z);
+   if(r>.18&&r<.45&&Math.abs(y)<.15){radial.push(r);vertical.push(y);}
+  }
+  assert(radial.length>30&&Math.max(...radial)-Math.min(...radial)>.04&&Math.max(...vertical)-Math.min(...vertical)>.04,'Banda con espesor radial y vertical real');assert(dist(start,assembled)>.1,'Ensamblado gradual desde posiciones dispersas');
   assert(a.beam()>startBeam+200&&introState(3.45).text===0,'El rayo crece antes de la entrada de textos');
   assert(dist(a.sample(),b.sample())<.00001,'Simulaciones independientes reproducibles');
-  const trail=new Float32Array(32);trail.set([assembled[0],assembled[1],1,1]);
+  const trail=new Float32Array(32);trail.set([assembled[0]/(1-assembled[2]*.38),assembled[1]/(1-assembled[2]*.38),1,1]);
   for(let i=1;i<=30;i++){control.draw(5+i/60,0,empty);perturbed.draw(5+i/60,0,trail);}
   const moving=a.sample(),pushed=b.sample();assert(dist(assembled,moving)>.003,'Las órbitas avanzan sin scroll ni puntero');
   assert(dist(moving,pushed)>.005,'El puntero perturba órbitas con fuerza integrada en GPU');
   assert(a.beam()>500&&b.beam()>500,'El rayo sigue continuo durante la perturbación');
   control.draw(5.5+1/60,0,empty);perturbed.draw(5.5+1/60,0,empty);
   assert(dist(a.sample(),b.sample())>.002&&dist(pushed,b.sample())<.05,'Retirar el puntero conserva inercia sin recolocación instantánea');
-  for(let i=2;i<=180;i++){control.draw(5.5+i/60,0,empty);perturbed.draw(5.5+i/60,0,empty);}
+  for(let i=2;i<=180;i++){control.draw(5.5+i/60,0,empty);perturbed.draw(5.5+i/60,0,empty);if(i%60===0)await new Promise(requestAnimationFrame);}
   assert(dist(a.sample(),b.sample())<.002,'Las partículas recuperan sus órbitas móviles');
   assert([...a.sample(),...b.sample()].every(Number.isFinite),'Órbitas, espirales y expulsiones mantienen valores finitos');
   control.resize(390,844);control.draw(9,0,empty);
@@ -55,11 +65,25 @@ document.querySelector('button').addEventListener('click',()=>{
   for(let i=32;i<=210;i++)field.draw(i/60,empty);
   assert(Math.hypot(...g.sample().slice(0,2))<.002,'Las estrellas retoman su deriva original');
   assert(g.gl.getError()===g.gl.NO_ERROR,'Galaxia sin errores WebGL');field.dispose();assert([...g.resources.values()].every(values=>values.size===0),'Desmontaje libera todos los recursos galácticos');
-  config.repulsionRadius=oldRadius;atmosphere=initAtmosphere();
-  assert(document.querySelectorAll('.ambient-layer').length===2&&document.querySelector('.galaxy-nebula'),'Capas de fondo, frente y nebulosa creadas');
-  atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.galaxy-nebula').length===0,'Desmontaje retira canvas, nebulosa y listeners');
+  config.repulsionRadius=oldRadius;
+  const sky=tracked();aurora=createAuroraRenderer(sky.canvas);assert(Boolean(aurora),'Shader de aurora compilado');aurora.resize();
+  const frame=()=>{const data=new Uint8Array(sky.canvas.width*sky.canvas.height*4);sky.gl.readPixels(0,0,sky.canvas.width,sky.canvas.height,sky.gl.RGBA,sky.gl.UNSIGNED_BYTE,data);return data;};
+  const alphaSum=data=>{let sum=0;for(let i=3;i<data.length;i+=4)sum+=data[i];return sum;};
+  const difference=(x,y)=>{let sum=0;for(let i=0;i<x.length;i++)sum+=Math.abs(x[i]-y[i]);return sum;};
+  aurora.draw(0,0,empty);const initialSky=frame();assert(alphaSum(initialSky)>1000,'Aurora visible y generada en GPU');
+  aurora.draw(20,0,empty);const flowingSky=frame();assert(difference(initialSky,flowingSky)>1000,'Aurora cambia sin depender del scroll');
+  aurora.draw(20,2,empty);const scrolledSky=frame();assert(difference(flowingSky,scrolledSky)>1000,'Scroll desplaza y cambia las cortinas y su paleta');
+  let brightest=3;for(let i=7;i<scrolledSky.length;i+=4)if(scrolledSky[i]>scrolledSky[brightest])brightest=i;
+  const pixel=(brightest-3)/4,w=sky.canvas.width,h=sky.canvas.height,auroraTrail=new Float32Array(32);auroraTrail.set([((pixel%w)+.5-w*.5)/h,(Math.floor(pixel/w)+.5-h*.5)/h,1,1]);
+  aurora.draw(20,2,auroraTrail);assert(difference(scrolledSky,frame())>50,'Puntero perturba localmente la aurora');
+  const mask=new Float32Array(48);mask.set([-10,-10,10,10]);aurora.draw(20,2,empty,mask,1);assert(alphaSum(frame())<alphaSum(scrolledSky)*.5,'Aurora baja su intensidad detrás del texto');
+  assert(Number(sky.canvas.dataset.resolutionScale)<=.5,'Aurora usa resolución reducida');assert(sky.gl.getError()===sky.gl.NO_ERROR,'Aurora sin errores WebGL');
+  aurora.dispose();assert([...sky.resources.values()].every(values=>values.size===0),'Desmontaje libera los recursos de la aurora');
+  atmosphere=initAtmosphere();
+  assert(document.querySelectorAll('.ambient-layer').length===2&&document.querySelector('.aurora-layer'),'Capas de fondo, frente y nebulosa creadas');
+  atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.aurora-layer').length===0,'Desmontaje retira canvas, nebulosa y listeners');
   output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
  }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);}
- finally{config.repulsionRadius=oldRadius;control?.dispose();perturbed?.dispose();field?.dispose();atmosphere?.dispose();}
+ finally{config.repulsionRadius=oldRadius;control?.dispose();perturbed?.dispose();field?.dispose();aurora?.dispose();atmosphere?.dispose();}
 });
 </script></html>

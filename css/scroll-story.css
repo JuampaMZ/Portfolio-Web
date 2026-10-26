@@ -47,4 +47,9 @@ main{position:relative;z-index:1}.footer{position:relative;z-index:1}
 body{isolation:isolate;background:#04080d}.cinema,.cinema-sticky{background:transparent}.cinema-sticky{touch-action:pan-y pinch-zoom}
 .cinema-copy{opacity:var(--intro-opacity,0);transform:translate3d(0,var(--intro-shift,30px),0);filter:blur(var(--intro-blur,5px))}.cinema-top,.cinema-bottom{opacity:var(--intro-opacity,0)}
 .ambient-layer--back{z-index:-1;opacity:1}.ambient-layer--front{z-index:10;opacity:1}
-.galaxy-nebula{position:fixed;inset:-5%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse at 23% 30%,#21476b88,transparent 52%),radial-gradient(ellipse at 77% 63%,#37295a80,transparent 48%),radial-gradient(ellipse at 56% 16%,#23555060,transparent 44%);will-change:transform}
+
+
+.aurora-layer{position:fixed;inset:0;width:100%;height:100%;z-index:-2;pointer-events:none;mix-blend-mode:screen;contain:strict}
+.cinema-shade{background:linear-gradient(90deg,#04080d66,transparent 65%),linear-gradient(0deg,#04080d 0%,transparent 22%,transparent 70%,#04080d22)}
+
+.contact{background:rgba(183,215,168,.86)}

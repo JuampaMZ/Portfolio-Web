@@ -16,7 +16,7 @@ vec3 pointerForce(vec3 p){
  for(int i=0;i<8;i++){
   if(uTrail[i].z<.004)continue;
   vec2 away=p.xy-uTrail[i].xy;float distance=length(away);
-  float reach=max(.0001,uRadius*uTrail[i].w),weight=pow(1.-smoothstep(0.,reach,distance),2.)*uTrail[i].z;
+  float reach=max(.0001,uRadius*uTrail[i].w);if(distance>=reach)continue;float weight=pow(1.-smoothstep(0.,reach,distance),2.)*uTrail[i].z;
   total+=weight;force+=vec3(normalize(away+vec2(.00001,0.)),.12*sin(p.z*31.))*weight*uRepulsion;
  }
  return force/max(1.,total);
