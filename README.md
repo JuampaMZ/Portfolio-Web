@@ -8,23 +8,23 @@ Node.js 20 o posterior. `npm run dev` inicia http://127.0.0.1:4173. `npm run che
 
 El build verifica su ruta absoluta antes de limpiar únicamente `dist/`. No publica fotos, CV, certificados ni demostraciones retiradas. Los archivos históricos se conservan en el repositorio.
 
-## Banda de acreción, rayo 3D y aurora
+## Dos C entrelazadas, rayo 3D y aurora
 
-Se conserva la entrada escalonada: el rayo aparece lentamente, las partículas se unen y después se revelan los textos. Las velocidades orbitales, de nube, deriva y parpadeo se reducen aproximadamente a la mitad.
+Se conserva la entrada escalonada: el rayo aparece lentamente, las partículas se unen y después se revelan los textos. El movimiento autónomo mantiene el ritmo calmo.
 
-El núcleo usa 32.000 partículas en escritorio y 10.000 en móvil. La banda es un toroide con sección radial y vertical, muestreo gaussiano más denso en el centro y bordes difusos. El 86% de las partículas forma la banda, con mayor brillo central. La velocidad angular depende del radio: las interiores giran más rápido. El resto forma una nube turbulenta y conserva ciclos de entrada y salida.
+El núcleo usa 32.000 partículas en escritorio y 10.000 en móvil. El 98% forma dos C gruesas de igual radio nominal, con planos perpendiculares, huecos en cruces opuestos y matices azul y violeta. El rayo se orienta sobre la bisectriz de las normales. Las partículas fluyen en sentidos opuestos; las interiores avanzan más rápido. Las puntas se desvanecen antes de reciclar la posición al extremo contrario, sin integrar una trayectoria por el hueco. El resto conserva una nube tenue.
 
-El rayo pivota en un ciclo cerrado de 50 segundos, con inclinación máxima de 28 grados y movimiento en profundidad. Su centro proyectado permanece estable. La base de la banda es perpendicular al eje del rayo evaluado con 0,85 segundos de retraso; la integración física aporta inercia adicional. El shader de la luz es independiente de las partículas. Las posiciones, velocidades y perturbaciones se integran en GPU con Transform Feedback, sin recorridos por partícula en JS.
+Cada C tiene retraso, bamboleo y respiración propios. Una envolvente calcula el grosor completo de los tubos, abre el hueco mínimo necesario y limita el movimiento relativo según el espacio libre. La separación conserva un margen adicional durante el ciclo, incluso con los máximos configurables. El rayo pivota en un ciclo cerrado de 50 segundos, con inclinación de hasta 28 grados y movimiento en profundidad; el centro proyectado queda estable. La luz se dibuja con un shader independiente. Posiciones, velocidades y perturbaciones se integran en GPU con Transform Feedback, sin recorridos por partícula en JS.
 
-El campo galáctico fijo cubre toda la página: 2.200 estrellas de fondo y 24 cercanas; en móvil se usan 700 y 8. El fondo tiene z-index negativo en un body aislado y el frente tiene pointer-events desactivados, baja opacidad, distribución por celdas y máscaras sobre los textos. Mouse y touch provocan repulsión con inercia y retorno a sus rutas. Los eventos son pasivos y se mantiene touchmove para la estela durante scroll nativo.
+La galaxia fija cubre toda la página con tres tamaños: 2.200 estrellas pequeñas, 420 medianas y 24 frontales con bokeh; en móvil son 700, 120 y 8. Las medianas y grandes tienen más velocidad y parallax. Los rangos de tamaño, cantidades, opacidades y brillo son independientes en el config. El fondo tiene z-index negativo y el frente pointer-events desactivados. Una distribución por celdas y máscaras de texto permite como máximo una candidata frontal atenuada por bloque, desvaneciendo las demás mientras lo cruzan. Mouse y touch provocan repulsión con inercia y retorno. Los eventos siguen siendo pasivos y touchmove mantiene la estela durante el scroll nativo.
 
 La aurora es otro canvas debajo de las estrellas, generado con un fragment shader de ruido fBm de cuatro octavas y hasta cuatro cortinas. Ondula de forma autónoma; el scroll suavizado cambia su posición, orientación y paleta entre verde, turquesa, violeta y azul. El puntero genera una ondulación local y las máscaras reducen su intensidad detrás del texto. Se renderiza por defecto a 25% de resolución CSS en escritorio y 22% en móvil, configurable hasta media resolución, y se escala suavemente. No usa imágenes ni videos.
 
 El giroscopio solo se activa en dispositivos móviles detectados. Toma la primera orientación válida como referencia, aplica límites y un filtro temporal. El frente se desplaza más que el núcleo, el fondo y la aurora. La inclinación también se suma al ciclo del rayo, sin reemplazarlo. En iOS, requestPermission se invoca dentro del primer gesto táctil válido; no hay botones ni diálogos propios. Android escucha directamente. Si falta el sensor o se rechaza el permiso, el efecto conserva su movimiento normal. Se recalibra al rotar la pantalla. Las pruebas de sensor son simuladas; requieren confirmación adicional en un teléfono físico.
 
 - js/particle-config.js centraliza cantidades, densidad, radios, espesores, velocidades, ciclo 3D, inclinación, colores, opacidades y parámetros de aurora.
-- js/cinema-renderer.js simula la banda, dibuja la luz y ofrece el panel lil-gui solo en desarrollo. Un solo pase de puntos combina centro y halo.
-- js/particle-motion.js calcula el eje, la base ortogonal y la proyección del rayo.
+- js/cinema-renderer.js simula las dos C, dibuja la luz y ofrece el panel lil-gui solo en desarrollo. Un solo pase de puntos combina centro y halo.
+- js/particle-motion.js calcula las dos bases, el margen de encastre, los movimientos independientes y la proyección del rayo.
 - js/particle-orientation.js controla permisos, referencia, suavizado y limpieza del sensor.
 - js/atmosphere.js administra las capas, máscaras y el scroll suavizado.
 - js/aurora-renderer.js crea la aurora con resolución reducida.
@@ -45,7 +45,7 @@ El giro automático es lento; el centro del cursor lo detiene y los bordes aumen
 
 ## Validación
 
-Las 14 pruebas de Node cubren navegación y prisma, entrada, presupuestos, estela táctil pasiva, ciclo 3D cerrado, bases ortogonales, pivote estable, detección móvil, referencia relativa, límites y suavizado, permiso iOS, rechazo y ausencia de sensor. La página local tests/gpu-preview.html verifica GPU, volumen de la banda, autonomía, perturbación y retorno, rayo, aurora visible, cambio con tiempo y scroll, ondulación, máscaras, resolución reducida y liberación de recursos. Sus lecturas de buffers solo existen en las pruebas y no se publican.
+Las 16 pruebas de Node cubren navegación y prisma, entrada, presupuestos, estela táctil pasiva, ciclo 3D cerrado, planos perpendiculares, bisectriz, margen de los tubos durante el ciclo, límites de configuración, pivote estable, detección móvil, referencia relativa, límites y suavizado, permiso iOS, rechazo y ausencia de sensor. La página local tests/gpu-preview.html verifica GPU, volumen de las dos C, huecos opuestos abiertos, bokeh y máscaras de texto, autonomía, perturbación y retorno, rayo, aurora visible, cambio con tiempo y scroll, ondulación, máscaras, resolución reducida y liberación de recursos. Sus lecturas de buffers solo existen en las pruebas y no se publican.
 
 La revisión manual comprueba consola, interacción fuera del núcleo, distintas secciones y viewport móvil. Un viewport no valida un giroscopio físico ni la presentación real del permiso de Safari. El rendimiento depende del hardware y de cuántas escenas se estén renderizando simultáneamente.
 

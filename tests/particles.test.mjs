@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PARTICLE_CONFIG,particleBudget,layerBudget,introState} from '../js/particle-config.js';
+import {PARTICLE_CONFIG,particleBudget,layerBudget,galaxySmallBudget,introState} from '../js/particle-config.js';
 import {createParticleInput} from '../js/particle-input.js';
 
 test('the beam starts first, assembly finishes before the text entrance, and all phases finish',()=>{
@@ -15,7 +15,11 @@ test('desktop budgets stay bounded and every layer reduces its load on mobile',(
  assert.ok(particleBudget(1440)>=20000&&particleBudget(1440)<=60000);assert.ok(particleBudget(390)<particleBudget(1440));
  assert.ok(particleBudget(390,{memory:2})<=10000);assert.ok(particleBudget(1024,{coarse:true})<particleBudget(1440));
  assert.equal(layerBudget(1024,false,{coarse:true}),layerBudget(390));assert.ok(layerBudget(390)<layerBudget(1440));assert.ok(layerBudget(390,true)<layerBudget(1440,true));
- assert.ok(layerBudget(1440)>layerBudget(1440,true)*20);assert.ok(PARTICLE_CONFIG.maxDpr<=2);assert.ok(PARTICLE_CONFIG.frontOpacity<=.2);
+ assert.ok(layerBudget(1440)>layerBudget(1440,true)*20);
+ assert.equal(layerBudget(1440),PARTICLE_CONFIG.smallCount+PARTICLE_CONFIG.mediumCount);assert.equal(galaxySmallBudget(390),PARTICLE_CONFIG.mobileSmallCount);
+ assert.ok(PARTICLE_CONFIG.smallCount>PARTICLE_CONFIG.mediumCount&&PARTICLE_CONFIG.mediumCount>PARTICLE_CONFIG.frontCount);
+ assert.ok(PARTICLE_CONFIG.smallSizeMax<PARTICLE_CONFIG.mediumSizeMin&&PARTICLE_CONFIG.mediumSizeMax<PARTICLE_CONFIG.frontSizeMin);
+ assert.ok(PARTICLE_CONFIG.frontSpeed>PARTICLE_CONFIG.mediumSpeed&&PARTICLE_CONFIG.frontParallax>PARTICLE_CONFIG.mediumParallax);assert.ok(PARTICLE_CONFIG.maxDpr<=2);assert.ok(PARTICLE_CONFIG.frontOpacity<=.25);
 });
 test('mouse and touch share passive input, retain a bounded wake and release it smoothly',()=>{
  const original={window:globalThis.window,document:globalThis.document,performance:globalThis.performance};let now=0;
