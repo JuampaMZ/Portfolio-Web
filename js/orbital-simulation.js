@@ -1,7 +1,7 @@
 import {gpuMath} from './particle-gpu.js';
 // Axial hourglass restored verbatim from 7b12045; rendering uses the new camera.
 export const orbitalSource=`
-uniform vec4 uPlacement;uniform float uCameraDistance,uCameraHalfHeight;uniform vec2 uScreenCenter;uniform vec3 uCenter;uniform mat3 uRingBasisA,uRingBasisB,uBeamBasis;uniform vec2 uRingRadii;
+uniform vec4 uPlacement;uniform float uCameraDistance,uCameraHalfHeight,uPointerDepth,uPointerSwirl,uReturnSpread;uniform vec2 uScreenCenter;uniform vec3 uCenter;uniform mat3 uRingBasisA,uRingBasisB,uBeamBasis;uniform vec2 uRingRadii;
 uniform float uRingCount,uGapCount,uGapOpacity,uNeckClearance,uTubeBound;
 uniform float uDustLength,uDustWaist,uDustEndRadius,uDustSpin,uDustFlow,uDustOpacity;
 uniform float uFlowSpeed,uGap,uTipFade,uBandRadius,uBandThickness,uBandHeight,uBandShear,uTurbulence,uTurbulenceSpeed;
@@ -47,7 +47,17 @@ vec3 orbitalTarget(float id,float time){
  }else p=uBeamBasis*beamDustLocal(id,time);
  return p*uPlacement.z+uCenter;
 }
-vec3 nucleusPointer(vec3 p){float viewHeight=uCameraHalfHeight*2.*max(.1,uCameraDistance-p.z);vec3 force=pointerForce(vec3(p.xy/viewHeight+uScreenCenter,p.z));force.xy*=viewHeight;return force;}
+vec3 nucleusPointer(vec3 p,float id){
+ float viewHeight=uCameraHalfHeight*2.*max(.1,uCameraDistance-p.z);vec2 screen=p.xy/viewHeight+uScreenCenter;vec3 force=vec3(0.);float total=0.,seed=random(id+77.);
+ for(int i=0;i<8;i++){
+  if(uTrail[i].z<.004)continue;vec2 away=screen-uTrail[i].xy;float distance=length(away),reach=max(.0001,uRadius*uTrail[i].w);if(distance>=reach)continue;
+  float falloff=pow(1.-smoothstep(0.,reach,distance),2.)*uTrail[i].z;
+  float wave=.75+.25*sin(distance/reach*9.-(1.-uTrail[i].z)*8.+seed*6.2831853);
+  vec2 direction=normalize(away+vec2(.00001,0.)),tangent=vec2(-direction.y,direction.x);
+  float depth=(seed>.5?1.:-1.)*(.65+.35*sin(seed*12.+p.y*13.));
+  force+=vec3((direction+tangent*uPointerSwirl)*viewHeight,depth*uPointerDepth)*falloff*wave*uRepulsion;total+=falloff;
+ }return force/max(1.,total);
+}
 `;
 export const simulationVertex=`#version 300 es
 precision highp float;
@@ -68,7 +78,8 @@ void main(){
  }// Recycle only while both tips are invisible; never integrate across the gap.
  else if(uReset>.5||((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5)){nextPosition=target;nextVelocity=vec3(0.);}
  else{
-  vec3 force=(target-aPosition)*uSpring+-aVelocity*uDamping+nucleusPointer(aPosition);
+  float spring=uSpring*mix(1.-uReturnSpread*.7,1.+uReturnSpread*.3,random(id+83.)),damping=uDamping*mix(.84,1.13,random(id+89.));
+  vec3 force=(target-aPosition)*spring+-aVelocity*damping+nucleusPointer(aPosition,id);
   nextVelocity=aVelocity+force*uDt;nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
   nextPosition=aPosition+nextVelocity*uDt;
  }

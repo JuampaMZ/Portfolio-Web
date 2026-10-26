@@ -1,65 +1,64 @@
 # Juan Pablo Muttoni — Portfolio
 
-Portfolio en español de desarrollo de software, análisis de datos y experiencias digitales. Identidad personal en azul noche, marfil y verde salvia junto a Craft Studio. HTML, CSS y módulos JavaScript; Three.js para el núcleo 3D.
+Portfolio en español de desarrollo de software, análisis de datos y experiencias digitales, junto a Craft Studio. HTML, CSS y módulos JavaScript; Three.js y transform feedback para el núcleo.
 
-## Desarrollo
+## Desarrollo y publicación
 
-Node.js 20 o posterior. `npm install`, `npm run dev` (http://127.0.0.1:4173), `npm run check`, `npm test` y `npm run build`.
+Node.js 20+: `npm install`, `npm run dev` (http://127.0.0.1:4173), `npm run check`, `npm test`, `npm run build`.
 
-El build empaqueta Three.js y los addons usados con esbuild en `assets/three-runtime.js`, sin CDN ni imports externos en el sitio. Solo copia una lista explícita de recursos públicos a `dist/`, tras verificar la ruta absoluta. El build escribe `IS_DEVELOPMENT=false`; las pruebas y dependencias de desarrollo no se publican. lil-gui solo se carga en localhost y desarrollo.
+El build empaqueta Three.js y sus addons con esbuild y copia una lista explícita de archivos públicos a `dist/`. No publica pruebas, mediciones, node_modules ni lil-gui. Escribe `IS_DEVELOPMENT=false`; el panel solo se importa en localhost/desarrollo. Vercel CLI publica el proyecto `juan-pablo-craft-portfolio`, equipo `juans-projects-079dba21`, en https://juan-pablo-craft-portfolio.vercel.app/. No hay sincronización automática con GitHub.
 
-## Núcleo 3D y profundidad
+`4575106` guarda el estado anterior a la transición perceptual y las esferas. Los controles están en `js/particle-config.js` y el panel local.
 
-El commit `562cd6d` guarda el estado anterior a esta reconstrucción. Se eliminan el rayo calculado en pantalla, la textura de máscara, la clasificación manual delantera/trasera y todos los parámetros y shaders de la mezcla de hélices reciente.
+## Color y ritmo
 
-La escena usa una `PerspectiveCamera` real de 48°, frente a la proyección manual anterior equivalente a unos 21,5°. El rayo es un `CylinderGeometry` cerrado de 48 segmentos radiales y 20 longitudinales, con radio constante en el mundo. Se orienta con una quaternion sobre el eje del ciclo de reloj de arena. Arranca con el extremo superior hacia la cámara (45°); la perspectiva cambia el tamaño aparente al acercar o alejar los extremos. Solo se ajusta el largo de los extremos para encuadrarlos; el radio no depende de píxeles ni de su profundidad.
+El rayo interpola de #3DDC97 a #3B9EFF y vuelve en 11 segundos. `js/beam-colors.js` convierte sRGB a lineal, interpola en OKLab y calcula cuerpo, núcleo casi blanco y tono del bloom. Usa las matrices públicas de [Björn Ottosson](https://bottosson.github.io/posts/oklab/). La interpolación sinusoidal evita cortes al invertir el recorrido.
 
-El material brillante del cilindro escribe en el buffer de profundidad. Las partículas usan las mismas matrices de cámara, `depthTest`, `depthWrite` y `NormalBlending`. Los fragmentos fuera del pequeño cuerpo circular se descartan. Los puntos traseros fallan el depth test contra el rayo; los delanteros lo cubren por composición alfa. No se ordenan manualmente según su posición frente al rayo, ni se atenúa su luz mediante máscaras.
+El flujo de las C, su respiración/bamboleo y el remolino axial bajan al 65% de su velocidad anterior; la opacidad de las bandas es 0,90. Se conserva el ciclo de reloj de arena de 50 segundos y el encastre geométrico. El remolino sigue siendo un reloj axial sutil: 800/250 partículas, sin la mezcla de hélices eliminada anteriormente.
 
-`RenderPass` resuelve primero color y profundidad. `UnrealBloomPass` extrae y difumina solo la luz visible de esa imagen; `OutputPass` convierte la salida lineal a sRGB, sin curva de tone mapping en este renderer. El bloom no puede recuperar una fuente oculta, aunque su difusión puede extender luz desde píxeles vecinos visibles. Se calcula a resolución reducida (50% del tamaño físico en escritorio, 35% en móvil) mientras la geometría conserva su resolución. Las partículas mantienen un centro blanco plano y un borde suave muy pequeño, dentro del mismo punto con alfa normal. El umbral de bloom deja sus centros blancos fuera de la extracción; el rayo es la fuente del halo verde.
+## Esferas y profundidad
 
-El remolino restaura la función `beamDustLocal` y los parámetros de `7b12045`: 2.200/750 partículas, largo 0,84, cintura 0,006, radio de extremos 0,045, giro 0,8, flujo axial 0,045 y opacidad 0,20. Es un reloj axial tenue, con semillas aleatorias y flujo en ambos sentidos. Desaparecen las trenzas y el color rosado añadido después. La integración cambia la cámara y el material de profundidad, conservando la fórmula del remolino.
+La cámara sigue siendo PerspectiveCamera de 48°. El rayo conserva CylinderGeometry de 48 segmentos, radio en unidades del mundo, orientación y escritura de profundidad. No hay máscaras de oclusión, clasificación manual delantera/trasera ni ajuste de grosor en pantalla.
 
-Las dos C conservan el volumen, el centro denso, los bordes difusos, el flujo opuesto, las aberturas pequeñas y el hilo tenue entre extremos. La cota geométrica de sus cuellos mantiene la separación durante retrasos, bamboleo e inclinación. Comparten el ciclo de 50 segundos del rayo. La entrada sigue mostrando primero el rayo, después el ensamblado gradual y luego los textos.
+`js/particle-sphere.js` sustituye los puntos planos por sphere impostors. El fragment shader intersecta el rayo de cámara con una esfera en view space, calcula normal, luz difusa del cilindro, reflejo especular y rim blanco fino. Proyecta la intersección y escribe `gl_FragDepth`: la superficie es curva también para el depth test. Conserva base #FFFFFF, NormalBlending, depthTest, depthWrite y toneMapped:false. La sombra y el leve tinte proceden de la iluminación, no de una base gris.
 
-## Blanco limpio y rayo nuclear
+Los tamaños se proyectan desde radios del mundo. El LOD simplifica el reflejo de las partículas pequeñas; móvil usa un umbral mayor. Un desenfoque aproximado y pequeño según distancia suaviza resaltados y añade un borde tenue fuera del foco, sin convertirlo en manchas. Ese borde no escribe una superficie que pueda ocultar al cilindro.
 
-El commit e07c3d0 guarda el estado previo a los cambios de color. El gris anterior provenía de mezclar azul y violeta, aplicar sombreado esférico y multiplicar la emisión por 0,60, además del ACES global del OutputPass. Ahora los dos anillos usan particleColor #FFFFFF y un centro de intensidad 1,04, sin sombreado gris ni cambio de tono por puntero. El tamaño de sus puntos se reduce un 10% para separar visualmente los núcleos; se conserva el kernel alfa, depthTest y depthWrite.
+RenderPass resuelve la profundidad antes de UnrealBloomPass y OutputPass. La salida es sRGB y NoToneMapping. Una selección de cromaticidad deja los centros blancos fuera del halo coloreado del rayo. El bloom difunde la imagen ya ocluida; no recupera fuentes ocultas, aunque puede extender luz visible desde píxeles vecinos.
 
-Los materiales de partículas y rayo tienen toneMapped:false. El renderer exclusivo del núcleo usa NoToneMapping: eso también evita que el OutputPass transforme de nuevo la imagen completa. Los hexadecimales sRGB del config se convierten a lineal mediante Three.Color y vuelven una sola vez a sRGB en la salida. Las otras capas y la interfaz conservan su tratamiento de color.
+## Interacción y recursos
 
-El cilindro conserva geometría, radio, cámara, orientación y profundidad. Su material distingue el núcleo #EFFFE6 y el cuerpo #39FF14 mediante las normales de la malla; la variación es de emisión, no de geometría. El bloom sigue calculándose después de la oclusión y su composición usa el tono lima #7CFF3A. El remolino recibe un matiz verde suave según su distancia al eje; los centros blancos de los anillos permanecen blancos.
+Transform feedback integra posición y velocidad en GPU. La onda del puntero incluye repulsión XY, giro y fuerzas Z con ambos signos. Cada semilla tiene una constante de resorte y amortiguación distinta, por lo que la recuperación no ocurre a la vez. La velocidad aumenta ligeramente el brillo. No hay bucles por partícula en JavaScript por frame ni transferencias de posiciones a CPU en producción.
 
-particleColor, particleIntensity, ringPointScale, beamCoreColor, beamColor, beamGlowColor, beamDustColor y beamCoreStart viven en particle-config.js y en el panel de desarrollo. No se introducen máscaras de profundidad, orden manual de bandas ni sprites de halo encima del rayo.
+Mouse y touch usan la misma entrada pasiva, sin bloquear scroll. Se mantienen inclinación relativa del móvil, parallax, límites y permiso de iOS mediante gesto. La animación autónoma solo se pausa cuando la pestaña está oculta.
 
-## Simulación y recursos
+El desmontaje libera buffers, VAO, transform feedback, geometrías, materiales, programas, targets y pases, y cierra el contexto exclusivo del núcleo para liberar auxiliares internos. El controlador elimina RAF, listeners, observadores, entrada, sensores y medidor local.
 
-Transform feedback integra posiciones, velocidades, resortes y fuerzas del puntero en GPU. Hay como máximo un paso por frame, con delta acotado a 1/30 s, para evitar duplicar trabajo cuando baja la frecuencia. Dos pares de buffers separados se alternan; Three.js lee el buffer activo mediante `GLBufferAttribute`. No hay copias de posición a CPU ni recorridos por partícula en JS por frame. Las lecturas de píxeles y buffers pertenecen exclusivamente a las páginas locales de prueba.
+## Rendimiento medido
 
-El presupuesto total sigue en 60.000 partículas para escritorio y 19.000 para móvil; se reduce en dispositivos con poca memoria. El DPR nunca supera 2. Mouse y touch comparten una estela pasiva; el desplazamiento natural de la página permanece disponible. La animación autónoma solo se suspende al ocultar la pestaña. La inclinación móvil conserva referencia relativa, límites, suavizado y permiso de iOS dentro del primer gesto válido.
+Se prioriza el detalle por partícula: 6.500 en escritorio y 3.200 en móvil, incluidas las del remolino. El presupuesto físico del núcleo es de 650.000 píxeles; DPR máximo 2. El bloom usa 50% de la resolución física en escritorio y 35% en móvil. La interfaz y las otras capas conservan su resolución.
 
-El desmontaje libera geometrías, materiales, programas, buffers, VAO, transform feedback, targets y pases. También cierra el contexto exclusivo del núcleo después de `dispose`, para liberar las texturas vacías y framebuffers auxiliares que Three.js mantiene internamente. Se abortan listeners, RAF y observadores desde el controlador de la página. El contexto perdido por el navegador puede recrearse mediante el flujo de restauración existente.
+La instrumentación local `?benchmark=1` espera seis segundos de entrada y registra ocho segundos de RAF de la página completa, con una sola pestaña animada. No es un temporizador GPU. El tiempo de comando JS y los percentiles se guardan en `tests/performance-results.json`. Las capturas de prueba no se usan para medir fps.
 
-## Cielo, contenido y navegación
+| Viewport | Antes: media / p95 / fps | Después: media / p95 / fps |
+| --- | --- | --- |
+| 1280×800 | 21,13 / 33,50 ms / 47,32 | 17,72 / 33,10 ms / 56,43 |
+| 390×844 | 16,65 / 16,90 ms / 60,05 | 16,65 / 16,90 ms / 60,05 |
 
-La galaxia mantiene 2.200 cuerpos pequeños, 420 medianos y 24 frontales (700/120/8 en móvil), con viajes largos, profundidad, halo, estela, parallax e interacción con el puntero. El fondo cubre toda la página y el frente tiene `pointer-events:none`; las máscaras de texto de estas capas protegen la lectura. Estas máscaras de legibilidad son independientes de la solución de profundidad retirada del núcleo.
-
-La aurora sigue generándose con ruido fBm en GPU a resolución reducida. El tiempo mueve las cortinas; scroll, puntero e inclinación añaden variaciones suaves. Ninguna sección depende del scroll para mantener su animación autónoma.
-
-Se conservan textos, encabezado fijo, contacto, entradas animadas y el prisma de Craft Studio, Animanía y Showroom 3D. Continúan retiradas la foto, las primeras tarjetas repetidas y las demostraciones de Power BI y automatización.
+Equipo de prueba: navegador integrado, 8 núcleos lógicos y 16 GB declarados por el navegador. DPR del núcleo antes/después: escritorio 1/0,80; móvil 1/1. En escritorio bajan los cuadros de más de 25 ms de 100 a 28 por ventana. No se alcanzan 60 fps estables en este equipo de escritorio; la medición móvil corresponde a un viewport, no a un teléfono físico ni una garantía para todo hardware.
 
 ## Verificación
 
-`npm test` ejecuta 21 pruebas de lógica, geometría, entrada, presupuestos y orientación. `tests/mesh-depth.html` muestra solo un anillo y el cilindro; `?full=1` incluye las dos C y el remolino. El debug rojo/azul cambia únicamente el color, nunca el orden de render ni el depth test. El botón de tres momentos comprueba 50, 58 y 75 segundos: cámara, malla, alfa normal, cruces, ancho rasterizado de los extremos y errores WebGL. En la escena completa, otra C delantera puede ocultar un cruce trasero de la primera; eso se evalúa como oclusión válida.
+- `npm test`: 24 pruebas de geometría, encastre, presupuestos, entrada pasiva, sensores, cámara, textos y conversión/ciclo OKLab.
+- `tests/sphere-gpu.html`: lectura de velocidades Z positivas/negativas, recuperación amortiguada y profundidad de superficie contrastada con una intersección analítica. Error GPU observado menor a 8×10⁻⁸; el centro es más cercano que los bordes.
+- `tests/mesh-depth.html`: anillo aislado y `?full=1`, debug rojo/azul y cruces en 50/58/75 segundos. Neutraliza solo el color del rayo durante la lectura para que el ciclo azul no confunda el debug. Mide oclusión y grosor rasterizados, sin alterar matrices, materiales de profundidad ni orden de render. Con menos partículas detalladas se verifica cobertura de las esferas que realmente se superponen, no una banda opaca continua.
+- `tests/colors-preview.html`: salida sRGB, materiales sin tone mapping, base blanca, color/bloom OKLab, píxeles claros y 54 verificaciones de cruces.
+- `tests/mesh-gpu.html`: ensamblado, remolino, interacción e inercia, resize sin acumulación de targets y liberación real de recursos.
+- `tests/detail-preview.html`: captura reproducible de detalle y onda del puntero.
+- `?scene-capture=50`, `58`, `75`: poses locales para capturas. No cambia la reproducción de producción.
 
-`tests/colors-preview.html` mide la salida sRGB final, comprueba blanco RGB [255,255,255] de una partícula aislada, extensión de su halo, núcleo claro, cuerpo y bloom verdes, y repite los cruces en tres momentos. La lectura se hace en la misma tarea de render y solo existe en pruebas.
+Revisión visual en escritorio y viewport 390×844, incluyendo puntero y navegación. No se verifican sensores físicos ni el diálogo de permisos de Safari con una emulación de viewport.
 
-`tests/mesh-gpu.html` comprueba ensamblado, reloj axial, interacción, inercia, posiciones finitas, resize, presupuesto móvil y liberación real de recursos. `tests/gpu-preview.html` verifica viajes, galaxia, frente, aurora, máscaras de lectura e interacción.
+## Contenido conservado
 
-Solo en localhost/desarrollo, `?scene-capture=50`, `58` y `75` fijan poses reproducibles para las capturas de la portada, sin alterar la reproducción de producción. La revisión manual cubre escritorio y viewport 390×844; no valida sensores físicos ni el diálogo nativo de Safari. El rendimiento depende del equipo, resolución y escenas simultáneas.
-
-## Publicación
-
-https://juan-pablo-craft-portfolio.vercel.app/
-
-Vercel CLI publica `dist/` en el proyecto `juan-pablo-craft-portfolio`, equipo `juans-projects-079dba21`. No hay sincronización automática con GitHub.
+Galaxia de fondo/frente, aurora fBm, viajes lentos y sus interacciones siguen funcionando. Se mantienen los textos, encabezado fijo, contacto, entradas animadas y prisma con Craft Studio, Animanía y Showroom 3D. Continúan retiradas la foto, las primeras tarjetas repetidas y las demostraciones de Power BI y automatización.

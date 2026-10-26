@@ -15,15 +15,19 @@ export function initScrollStory(){
  const copy=section.querySelector('.cinema-copy'),acts=[...section.querySelectorAll('[data-story-act]')],lines=acts.map(act=>[...act.querySelectorAll('.cinema-line>span')]),counter=section.querySelector('.cinema-count');
  const shortViewport=matchMedia('(max-height:520px)'),input=createParticleInput(),orientation=createDeviceTilt(),atmosphere=initAtmosphere(input,orientation);
  let renderer=createCinemaRenderer(canvas),destroyed=false,raf=0,scrollRaf=0,scrollRequested=false,previousTime=0,animationTime=0,progress=0,active=-1,lastIntro=-1;
+ const benchmark=IS_DEVELOPMENT&&['localhost','127.0.0.1','[::1]'].includes(location.hostname)&&new URLSearchParams(location.search).get('benchmark')==='1';let meter=null;
+ if(benchmark)import('./performance-meter.js').then(({createPerformanceMeter})=>{if(!destroyed)meter=createPerformanceMeter(canvas);});
  let bounds=stage.getBoundingClientRect();
  section.classList.toggle('has-renderer',Boolean(renderer));
- if(captureTime===null)renderer?.attachDevelopmentPanel().catch(error=>console.warn('No se pudo abrir el panel local.',error.message));
+ if(captureTime===null&&!benchmark)renderer?.attachDevelopmentPanel().catch(error=>console.warn('No se pudo abrir el panel local.',error.message));
  function requestFrame(){if(!destroyed&&!document.hidden&&!raf)raf=requestAnimationFrame(draw);}
  function draw(now){
   raf=0;if(destroyed||document.hidden)return;
   if(captureTime===null)animationTime+=previousTime?Math.min(now-previousTime,50)/1000:0;else animationTime=captureTime;previousTime=now;
   const trail=captureTime===null?input.sample(stage.clientWidth,stage.clientHeight,bounds.top,bounds.left,bounds.bottom>0&&bounds.top<innerHeight):captureTrail;
+  const renderStart=meter?performance.now():0;
   const intro=renderer?.draw(animationTime,progress,trail,captureTime===null?orientation.sample():[0,0])||{text:1};
+  meter?.frame(now,animationTime,performance.now()-renderStart);
   if(intro.text!==lastIntro){
    lastIntro=intro.text;stage.style.setProperty('--intro-opacity',intro.text.toFixed(4));stage.style.setProperty('--intro-shift',((1-intro.text)*30)+'px');stage.style.setProperty('--intro-blur',((1-intro.text)*5)+'px');
    copy.setAttribute('aria-hidden',String(intro.text<.02));stage.dataset.intro=intro.text>=1?'ready':'assembling';
@@ -69,7 +73,7 @@ export function initScrollStory(){
  const resizeObserver=new ResizeObserver(()=>resize());resizeObserver.observe(header);
  function dispose(){
   if(destroyed)return;destroyed=true;controller.abort();if(raf)cancelAnimationFrame(raf);if(scrollRaf)cancelAnimationFrame(scrollRaf);
-  revealObserver.disconnect();resizeObserver.disconnect();renderer?.dispose();atmosphere.dispose();input.dispose();orientation.dispose();root.classList.remove('scroll-enhanced');section.classList.remove('has-renderer');
+  revealObserver.disconnect();resizeObserver.disconnect();meter?.dispose();renderer?.dispose();atmosphere.dispose();input.dispose();orientation.dispose();root.classList.remove('scroll-enhanced');section.classList.remove('has-renderer');
  }
  on(window,'pagehide',event=>{if(!event.persisted)dispose();});resize();updateScroll();
  // Fixed inspection frames exist only on the local development server.

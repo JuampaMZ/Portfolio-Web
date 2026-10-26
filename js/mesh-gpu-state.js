@@ -10,6 +10,7 @@ export function createMeshGpuState(gl,count){
  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
  return {
   get position(){return slots[read].buffers[0];},
+  get velocity(){return slots[read].buffers[1];},
   step(){const target=slots[1-read];gl.enable(gl.RASTERIZER_DISCARD);gl.bindVertexArray(slots[read].vao);gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,target.feedback);gl.beginTransformFeedback(gl.POINTS);gl.drawArrays(gl.POINTS,0,count);gl.endTransformFeedback();gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);gl.disable(gl.RASTERIZER_DISCARD);gl.bindVertexArray(null);read=1-read;},
   dispose(){if(disposed)return;disposed=true;gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);gl.bindVertexArray(null);slots.forEach(s=>{s.buffers.forEach(b=>gl.deleteBuffer(b));gl.deleteVertexArray(s.vao);gl.deleteTransformFeedback(s.feedback);});}
  };

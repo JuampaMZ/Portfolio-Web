@@ -12,7 +12,7 @@ test('the beam starts first, assembly finishes before the text entrance, and all
  for(let i=1;i<60;i++)for(const key of ['beam','assembly','text'])assert.ok(introState(i/10)[key]>=introState((i-1)/10)[key]);
 });
 test('desktop budgets stay bounded and every layer reduces its load on mobile',()=>{
- assert.ok(particleBudget(1440)>=20000&&particleBudget(1440)<=60000);assert.ok(particleBudget(390)<particleBudget(1440));
+ assert.ok(particleBudget(1440)>=5000&&particleBudget(1440)<=60000);assert.ok(particleBudget(390)<particleBudget(1440));
  assert.ok(particleBudget(390,{memory:2})<=10000);assert.ok(particleBudget(1024,{coarse:true})<particleBudget(1440));
  assert.equal(layerBudget(1024,false,{coarse:true}),layerBudget(390));assert.ok(layerBudget(390)<layerBudget(1440));assert.ok(layerBudget(390,true)<layerBudget(1440,true));
  assert.ok(layerBudget(1440)>layerBudget(1440,true)*20);
@@ -47,9 +47,8 @@ test('the axial hourglass and fine gap thread stay inside the mobile and desktop
  const without=nucleusGroups(32000,1440,{}, {...PARTICLE_CONFIG,gapDensity:0});assert.equal(without.gap,0);
 });
 
-test('the wider bands retain particle density within five percent on desktop and mobile',()=>{
- const area=(PARTICLE_CONFIG.bandThickness/.060)*(PARTICLE_CONFIG.bandHeight/.052);
- assert.ok(area>1.9&&area<2.1);
- for(const [width,previousRing]of [[1440,29761],[390,9238]]){const now=nucleusGroups(particleBudget(width),width);assert.ok(Math.abs(now.ring/previousRing/area-1)<.05);}
- assert.equal(PARTICLE_CONFIG.beamDustCount,2200);assert.equal(PARTICLE_CONFIG.mobileBeamDustCount,750);assert.equal(PARTICLE_CONFIG.beamDustOpacity,.20);assert.equal(PARTICLE_CONFIG.beamDustWaist,.006);assert.equal(PARTICLE_CONFIG.beamDustEndRadius,.045);
+test('detail budgets retain band geometry and reduce angular flow and dust motion by 35%',()=>{
+ assert.equal(PARTICLE_CONFIG.bandThickness,.084);assert.equal(PARTICLE_CONFIG.bandHeight,.0728);
+ assert.ok(Math.abs(PARTICLE_CONFIG.ringFlowSpeed/.21-.65)<1e-8);assert.ok(Math.abs(PARTICLE_CONFIG.beamDustSpin/.8-.65)<1e-8);assert.ok(Math.abs(PARTICLE_CONFIG.beamDustFlow/.045-.65)<1e-8);
+ assert.ok(PARTICLE_CONFIG.ringOpacity<1&&PARTICLE_CONFIG.ringOpacity>.8);assert.ok(particleBudget(390)<5000&&particleBudget(1440)<20000);
 });

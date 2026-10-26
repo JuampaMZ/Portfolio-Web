@@ -42,10 +42,10 @@ export function interlockedRings(time,tilt=[0,0],blend=1){
  const u=x.map((v,i)=>v*Math.cos(yaw)-z[i]*Math.sin(yaw)),side=x.map((v,i)=>v*Math.sin(yaw)+z[i]*Math.cos(yaw));
  const frames=[config.ringLagA,config.ringLagB].map((lag,index)=>{
   const delayed=beamPose(time-Math.max(0,lag),tilt,blend).direction,wobble=Math.min(3,Math.max(0,config.ringWobble))*Math.PI/180*blend;
-  const desired=normalize3(delayed.map((v,i)=>v+x[i]*Math.sin(time*.17+index*2.1)*wobble+z[i]*Math.sin(time*.13+index*1.7)*wobble*.7));
+  const desired=normalize3(delayed.map((v,i)=>v+x[i]*Math.sin(time*.17*config.ringMotionSpeed+index*2.1)*wobble+z[i]*Math.sin(time*.13*config.ringMotionSpeed+index*1.7)*wobble*.7));
   const normal=normalize3(y.map((v,i)=>v+side[i]*(index===0?1:-1)));
   const vectors=[u,normal,cross(u,normal)].map(v=>limitedRotation(v,pose.direction,desired,geometry.maxRotation));
-  return {basis:new Float32Array(vectors.flat()),radius:geometry.radius+Math.sin(time*.19+index*2.4)*geometry.breath*blend};
+  return {basis:new Float32Array(vectors.flat()),radius:geometry.radius+Math.sin(time*.19*config.ringMotionSpeed+index*2.4)*geometry.breath*blend};
  });
  return {pose,geometry,frames};
 }
