@@ -1,3 +1,4 @@
+import './build-three.mjs';
 import { mkdir, cp, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,7 @@ if (resolve(process.cwd()) !== projectRoot || dirname(output) !== projectRoot) {
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const path of ['index.html', 'css/portfolio.css', 'css/scroll-story.css', 'js/portfolio.js', 'js/motion.js', 'js/scroll-story.js', 'js/scroll-math.js', 'js/cinema-renderer.js', 'js/particle-config.js', 'js/particle-input.js', 'js/particle-gpu.js', 'js/particle-motion.js', 'js/particle-orientation.js', 'js/aurora-renderer.js', 'js/environment.js', 'js/atmosphere.js',
-  'assets/animania.png', 'assets/craft-logo.svg', 'assets/craft-mark.svg',
+  'js/beam-mesh-pose.js','js/core-mesh-renderer.js','js/mesh-gpu-state.js','js/orbital-simulation.js','js/particle-panel.js','assets/three-runtime.js','assets/animania.png', 'assets/craft-logo.svg', 'assets/craft-mark.svg',
   'assets/craft.jpg', 'assets/showroom.jpg', 'assets/favicon.svg']) {
   const destination = resolve(output, path);
   await mkdir(dirname(destination), { recursive: true });

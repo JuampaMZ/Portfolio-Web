@@ -49,25 +49,3 @@ export function interlockedRings(time,tilt=[0,0],blend=1){
  });
  return {pose,geometry,frames};
 }
-export function projectPoint(p){const scale=1/Math.max(.55,1-p[2]*.38);return [p[0]*scale,p[1]*scale];}
-export function beamEndpoints(pose,placement,growth=1){
- const [a,b]=beamWorldEndpoints(pose,placement,growth).map(projectPoint);
- return new Float32Array([...a,...b]);
-}
-export function beamWorldEndpoints(pose,placement,growth=1){
- const center=[placement[0]*(1-pose.depth*.38),placement[1]*(1-pose.depth*.38),pose.depth],maximum=placement[2]*config.beamLength*.5;
- const w=1-center[2]*.38,aspect=placement[3]||Infinity;
- // Trim only the tips to the visible frustum; the radius remains a world unit.
- return [1,-1].map(sign=>{
-  let extent=maximum;
-  for(const [coordinate,min,max]of [[0,-aspect*.5+.04,aspect*.5-.04],[1,-.45,.38]]){
-   if(!Number.isFinite(min))continue;
-   const d=pose.direction[coordinate]*sign,dz=pose.direction[2]*sign;
-   const upper=d+max*.38*dz,lower=-d-min*.38*dz;
-   if(upper>0)extent=Math.min(extent,(max*w-center[coordinate])/upper);
-   if(lower>0)extent=Math.min(extent,(center[coordinate]-min*w)/lower);
-  }
-  return center.map((v,i)=>v+sign*pose.direction[i]*Math.max(.01,extent)*growth);
- });
-}
-export function projectedDepth(z){const distance=1/.38-z;return 10/9.9-1/(9.9*distance);}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PARTICLE_CONFIG as config} from '../js/particle-config.js';
-import {beamPose,bandBasis,beamEndpoints,interlockGeometry,interlockedRings,ringTubeScale,beamWorldEndpoints,projectPoint,projectedDepth} from '../js/particle-motion.js';
+import {beamPose,bandBasis,interlockGeometry,interlockedRings,ringTubeScale} from '../js/particle-motion.js';
 import {isMobileSensorDevice,relativeTilt,tiltOffset,createDeviceTilt} from '../js/particle-orientation.js';
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0),distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 
@@ -24,8 +24,6 @@ test('the beam pivot remains stable and its axis bisects the two nominal perpend
   const {pose,frames}=interlockedRings(8),normals=frames.map(f=>[...f.basis.slice(3,6)]);
   assert.ok(Math.abs(dot(normals[0],normals[1]))<1e-6);
   const sum=normals[0].map((v,i)=>(v+normals[1][i])/Math.SQRT2);assert.ok(distance(sum,pose.direction)<1e-6);
-  const placement=[.4,.05,1,0],ends=beamEndpoints(pose,placement),d=[ends[2]-ends[0],ends[3]-ends[1]],to=[placement[0]-ends[0],placement[1]-ends[1]];
-  assert.ok(Math.abs(d[0]*to[1]-d[1]*to[0])<1e-6);assert.ok([...ends].every(Number.isFinite));
  }finally{Object.assign(config,previous);}
 });
 test('both thick C tubes retain clearance across hourglass motion, independent lag, wobble and mobile tilt',()=>{
@@ -89,11 +87,4 @@ test('the C opening adjusts to the 40% wider bands and the necks preserve the vo
  const g=interlockGeometry();assert.ok(g.gap*180/Math.PI>=23&&g.gap*180/Math.PI<=27);
  assert.ok(ringTubeScale(g.gap/2,0,g)<.35);assert.ok(ringTubeScale(Math.PI,0,g)<.35);
  assert.equal(ringTubeScale(Math.PI/2,0,g),1);assert.equal(ringTubeScale(Math.PI*1.5,1,g),1);
-});
-test('beam endpoints and point depth share the same perspective throughout the hourglass cycle',()=>{
- for(const t of [5,17.5,30,42.5]){
-  const pose=beamPose(t),placement=[.4,.05,1,0],world=beamWorldEndpoints(pose,placement),ends=beamEndpoints(pose,placement);
-  world.forEach((p,index)=>assert.ok(distance(projectPoint(p),[...ends.slice(index*2,index*2+2)])<1e-6));
-  assert.ok(projectedDepth(pose.depth+.18)<projectedDepth(pose.depth));assert.ok(projectedDepth(pose.depth-.18)>projectedDepth(pose.depth));
- }
 });

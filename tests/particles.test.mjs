@@ -51,5 +51,5 @@ test('the wider bands retain particle density within five percent on desktop and
  const area=(PARTICLE_CONFIG.bandThickness/.060)*(PARTICLE_CONFIG.bandHeight/.052);
  assert.ok(area>1.9&&area<2.1);
  for(const [width,previousRing]of [[1440,29761],[390,9238]]){const now=nucleusGroups(particleBudget(width),width);assert.ok(Math.abs(now.ring/previousRing/area-1)<.05);}
- assert.ok(PARTICLE_CONFIG.beamHelixCount>=4);assert.ok(PARTICLE_CONFIG.beamHelixRadiusMin<PARTICLE_CONFIG.beamHelixRadiusMax);assert.ok(PARTICLE_CONFIG.beamHelixReverse>0&&PARTICLE_CONFIG.beamHelixReverse<1);
+ assert.equal(PARTICLE_CONFIG.beamDustCount,2200);assert.equal(PARTICLE_CONFIG.mobileBeamDustCount,750);assert.equal(PARTICLE_CONFIG.beamDustOpacity,.20);assert.equal(PARTICLE_CONFIG.beamDustWaist,.006);assert.equal(PARTICLE_CONFIG.beamDustEndRadius,.045);
 });
