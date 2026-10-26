@@ -1,62 +1,65 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><title>Verificación GPU del portfolio</title>
-<style>body{margin:20px;background:#071115;color:#e9efff;font:15px system-ui}canvas{width:960px;height:640px;max-width:100%;border:1px solid #31445f}pre{white-space:pre-wrap}button{padding:10px;margin-bottom:12px}</style>
-<h1>Verificación GPU</h1><button id="run">Ejecutar comprobaciones</button><pre id="result">Listo para comprobar.</pre><canvas width="960" height="640"></canvas>
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Verificación GPU del núcleo</title>
+<style>body{margin:20px;background:#04080d;color:#e9efff;font:14px system-ui}canvas{width:760px;height:500px;max-width:100%;border:1px solid #31445f}pre{white-space:pre-wrap}button{padding:10px;margin-bottom:12px}</style>
+<h1>Verificación GPU del núcleo orbital</h1><button id="run">Ejecutar comprobaciones</button><pre id="result">Listo para comprobar.</pre><div id="canvases"></div>
 <script type="module">
 import {createCinemaRenderer} from '../js/cinema-renderer.js';
-import {initAtmosphere} from '../js/atmosphere.js';
-const canvas=document.querySelector('canvas'),output=document.querySelector('pre');
-const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false});
-const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
-for(const kind of kinds){
- const create=gl['create'+kind].bind(gl),destroy=gl['delete'+kind].bind(gl);
- gl['create'+kind]=(...args)=>{const value=create(...args);resources.get(kind).add(value);return value;};
- gl['delete'+kind]=value=>{resources.get(kind).delete(value);return destroy(value);};
+import {initAtmosphere,createGalaxyRenderer} from '../js/atmosphere.js';
+import {PARTICLE_CONFIG as config,introState} from '../js/particle-config.js';
+const output=document.querySelector('pre'),host=document.querySelector('#canvases');
+function tracked(){
+ const canvas=document.createElement('canvas');host.append(canvas);
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false});
+ const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
+ for(const kind of kinds){
+  const create=gl['create'+kind].bind(gl),destroy=gl['delete'+kind].bind(gl);
+  gl['create'+kind]=(...args)=>{const value=create(...args);resources.get(kind).add(value);return value;};
+  gl['delete'+kind]=value=>{resources.get(kind).delete(value);return destroy(value);};
+ }
+ let latest=null;const draw=gl.drawArrays.bind(gl);
+ gl.drawArrays=(...args)=>{if(!gl.isEnabled(gl.RASTERIZER_DISCARD))latest=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);return draw(...args);};
+ return {canvas,gl,resources,sample(){const data=new Float32Array(64*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
 }
-let latestState=null,simulationPasses=0;
-const draw=gl.drawArrays.bind(gl);
-gl.drawArrays=(...args)=>{
- if(gl.isEnabled(gl.RASTERIZER_DISCARD))simulationPasses++;
- else latestState=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
- return draw(...args);
-};
-function sample(){
- // Test-only readback. Production never reads particle state back to JavaScript.
- const data=new Float32Array(64*6);gl.bindBuffer(gl.ARRAY_BUFFER,latestState);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;
-}
-function beamBrightness(){const pixel=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return pixel[0]+pixel[1]+pixel[2];}
-const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
 document.querySelector('button').addEventListener('click',()=>{
  const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
- let renderer=null;
+ const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null;const oldRadius=config.repulsionRadius;
  try{
-  renderer=createCinemaRenderer(canvas);assert(Boolean(renderer),'Shaders WebGL 2 compilados');renderer.resize(960,640);
-  const idle={x:0,y:0,active:0};renderer.draw(0,0,idle);const scatter=sample();
-  for(let i=1;i<=126;i++)renderer.draw(i/60,0,idle);const assembled=sample();assert(distance(scatter,assembled)>.1,'Ensamblado inicial desde posiciones dispersas');
-  const intactBeam=beamBrightness();
-  let time=2.1;
-  const pointer={x:assembled[0]*2*640/960,y:-assembled[1]*2,active:1};
-  for(let i=0;i<40;i++){time+=1/60;renderer.draw(time,0,pointer);}
-  const pushed=sample();assert(distance(assembled,pushed)>.02,'Repulsión integrada en GPU');
-  assert(intactBeam>500&&beamBrightness()>500&&canvas.dataset.beamMaterial==='continuous-light','Rayo continuo independiente de la dispersión de partículas');
-  for(let i=0;i<150;i++){time+=1/60;renderer.draw(time,0,idle);}
-  const returned=sample();assert(distance(assembled,returned)<.02,'Resorte amortiguado recompone la forma');
-  renderer.explode(pointer.x,pointer.y);time+=1/60;renderer.draw(time,0,idle);const blasted=sample();
-  assert(Math.hypot(blasted[3],blasted[4],blasted[5])>.3,'Clic aplica impulso radial a la velocidad');
-  for(let i=0;i<150;i++){time+=1/60;renderer.draw(time,0,idle);}
-  assert(distance(assembled,sample())<.02,'La explosión vuelve a ensamblarse');
-  const beforePause=sample(),passes=simulationPasses;renderer.draw(time,0,idle,false);
-  assert(simulationPasses===passes&&distance(beforePause,sample())===0,'Pausa sin avanzar la simulación');
-  renderer.draw(time,0,idle,false,true);assert(simulationPasses===passes&&canvas.dataset.particlePhase==='static','Movimiento reducido muestra la forma sin simulación');
-  renderer.resize(390,844);renderer.draw(0,0,idle,false,true);
-  assert(Number(canvas.dataset.particleCount)<20000&&Number(canvas.dataset.pixelRatio)<=2,'Resize recalcula forma y reduce carga móvil');
-  assert(resources.get('Buffer').size===3&&resources.get('VertexArray').size===2&&resources.get('TransformFeedback').size===2,'Resize libera geometría y buffers anteriores');
-  assert(gl.getError()===gl.NO_ERROR,'Sin errores WebGL durante interacción, pausa y resize');
-  renderer.dispose();assert([...resources.values()].every(values=>values.size===0),'Desmontaje libera buffers, programas, shaders, VAO y transform feedback');
-  const atmosphere=initAtmosphere();
-  assert(document.querySelectorAll('.ambient-layer').length===2,'Atmósfera con capas delantera y trasera');
-  atmosphere.setPaused(true);atmosphere.dispose();
-  assert(document.querySelectorAll('.ambient-layer').length===0,'Desmontaje retira ambas capas ambientales y sus recursos');
+  control=createCinemaRenderer(a.canvas);perturbed=createCinemaRenderer(b.canvas);assert(Boolean(control&&perturbed),'Shaders de órbitas y nube compilados');
+  control.resize(800,500);perturbed.resize(800,500);const empty=new Float32Array(32);
+  control.draw(0,0,empty);perturbed.draw(0,0,empty);const start=a.sample(),startBeam=a.beam();
+  for(let i=1;i<=300;i++){control.draw(i/60,0,empty);perturbed.draw(i/60,0,empty);}
+  const assembled=a.sample();assert(dist(start,assembled)>.1,'Ensamblado gradual desde posiciones dispersas');
+  assert(a.beam()>startBeam+200&&introState(3.45).text===0,'El rayo crece antes de la entrada de textos');
+  assert(dist(a.sample(),b.sample())<.00001,'Simulaciones independientes reproducibles');
+  const trail=new Float32Array(32);trail.set([assembled[0],assembled[1],1,1]);
+  for(let i=1;i<=30;i++){control.draw(5+i/60,0,empty);perturbed.draw(5+i/60,0,trail);}
+  const moving=a.sample(),pushed=b.sample();assert(dist(assembled,moving)>.003,'Las órbitas avanzan sin scroll ni puntero');
+  assert(dist(moving,pushed)>.005,'El puntero perturba órbitas con fuerza integrada en GPU');
+  assert(a.beam()>500&&b.beam()>500,'El rayo sigue continuo durante la perturbación');
+  control.draw(5.5+1/60,0,empty);perturbed.draw(5.5+1/60,0,empty);
+  assert(dist(a.sample(),b.sample())>.002&&dist(pushed,b.sample())<.05,'Retirar el puntero conserva inercia sin recolocación instantánea');
+  for(let i=2;i<=180;i++){control.draw(5.5+i/60,0,empty);perturbed.draw(5.5+i/60,0,empty);}
+  assert(dist(a.sample(),b.sample())<.002,'Las partículas recuperan sus órbitas móviles');
+  assert([...a.sample(),...b.sample()].every(Number.isFinite),'Órbitas, espirales y expulsiones mantienen valores finitos');
+  control.resize(390,844);control.draw(9,0,empty);
+  assert(Number(a.canvas.dataset.particleCount)<=10000&&Number(a.canvas.dataset.pixelRatio)<=2,'Resize reduce partículas y DPR en móvil');
+  assert(a.canvas.dataset.particlePhase==='orbiting','El resize no reinicia la entrada ni detiene la animación');
+  assert(a.resources.get('Buffer').size===2&&a.resources.get('VertexArray').size===2&&a.resources.get('TransformFeedback').size===2,'Resize libera los buffers anteriores');
+  assert(a.gl.getError()===a.gl.NO_ERROR&&b.gl.getError()===b.gl.NO_ERROR,'Núcleo sin errores WebGL');
+  control.dispose();perturbed.dispose();assert([...a.resources.values(),...b.resources.values()].every(values=>values.size===0),'Desmontaje libera todos los recursos del núcleo');
+  const g=tracked();field=createGalaxyRenderer(g.canvas);field.resize();config.repulsionRadius=5000;
+  field.draw(0,empty);const wide=new Float32Array(32);wide.set([0,0,1,1]);
+  for(let i=1;i<=30;i++)field.draw(i/60,wide);
+  const diverted=g.sample();assert(Math.hypot(diverted[0],diverted[1])>.01,'El campo galáctico también esquiva el puntero en GPU');
+  field.draw(31/60,empty);assert(Math.hypot(...g.sample().slice(0,2))>.005,'El campo conserva la estela con inercia');
+  for(let i=32;i<=210;i++)field.draw(i/60,empty);
+  assert(Math.hypot(...g.sample().slice(0,2))<.002,'Las estrellas retoman su deriva original');
+  assert(g.gl.getError()===g.gl.NO_ERROR,'Galaxia sin errores WebGL');field.dispose();assert([...g.resources.values()].every(values=>values.size===0),'Desmontaje libera todos los recursos galácticos');
+  config.repulsionRadius=oldRadius;atmosphere=initAtmosphere();
+  assert(document.querySelectorAll('.ambient-layer').length===2&&document.querySelector('.galaxy-nebula'),'Capas de fondo, frente y nebulosa creadas');
+  atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.galaxy-nebula').length===0,'Desmontaje retira canvas, nebulosa y listeners');
   output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
- }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);renderer?.dispose();}
+ }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);}
+ finally{config.repulsionRadius=oldRadius;control?.dispose();perturbed?.dispose();field?.dispose();atmosphere?.dispose();}
 });
 </script></html>

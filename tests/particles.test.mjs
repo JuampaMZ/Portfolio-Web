@@ -1,35 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sampleShapePixels} from '../js/particle-shape.js';
-import {particleBudget,PARTICLE_CONFIG} from '../js/cinema-renderer.js';
+import {PARTICLE_CONFIG,particleBudget,layerBudget,introState} from '../js/particle-config.js';
+import {createParticleInput} from '../js/particle-input.js';
 
-const image={width:3,height:2,data:new Uint8ClampedArray([
- 0,0,0,0, 180,0,200,255, 0,0,0,0,
- 90,0,60,255, 0,0,0,0, 255,0,140,255
-])};
-
-test('pixel sampling preserves the silhouette holes and returns the requested count',()=>{
- const homes=sampleShapePixels(image,40000);assert.equal(homes.length,160000);
- for(let i=0;i<homes.length;i+=4){
-  const x=Math.floor((homes[i]+.5)*image.width),y=Math.floor((.5-homes[i+1])*image.height);
-  assert.equal(image.data[(y*image.width+x)*4+3],255);
-  assert.ok(homes[i+2]>=-.16&&homes[i+2]<=.16);assert.ok(homes[i+3]>0&&homes[i+3]<=1);
+test('the beam starts first, assembly finishes before the text entrance, and all phases finish',()=>{
+ const c=PARTICLE_CONFIG;
+ assert.deepEqual(introState(0),{beam:0,assembly:0,text:0});
+ assert.ok(introState(c.assemblyDelay*.7).beam>0);assert.equal(introState(c.assemblyDelay*.7).assembly,0);
+ const assembled=introState(c.assemblyDelay+c.assemblySeconds);assert.equal(assembled.assembly,1);assert.equal(assembled.text,0);
+ assert.deepEqual(introState(20),{beam:1,assembly:1,text:1});
+ for(let i=1;i<60;i++)for(const key of ['beam','assembly','text'])assert.ok(introState(i/10)[key]>=introState((i-1)/10)[key]);
+});
+test('desktop budgets stay bounded and every layer reduces its load on mobile',()=>{
+ assert.ok(particleBudget(1440)>=20000&&particleBudget(1440)<=60000);assert.ok(particleBudget(390)<particleBudget(1440));
+ assert.ok(particleBudget(390,{memory:2})<=10000);assert.ok(particleBudget(1024,{coarse:true})<particleBudget(1440));
+ assert.equal(layerBudget(1024,false,{coarse:true}),layerBudget(390));assert.ok(layerBudget(390)<layerBudget(1440));assert.ok(layerBudget(390,true)<layerBudget(1440,true));
+ assert.ok(layerBudget(1440)>layerBudget(1440,true)*20);assert.ok(PARTICLE_CONFIG.maxDpr<=2);assert.ok(PARTICLE_CONFIG.frontOpacity<=.2);
+});
+test('mouse and touch share passive input, retain a bounded wake and release it smoothly',()=>{
+ const original={window:globalThis.window,document:globalThis.document,performance:globalThis.performance};let now=0;
+ class Target extends EventTarget{options=[];addEventListener(type,fn,options){this.options.push(options);super.addEventListener(type,fn,options);}}
+ const w=new Target(),d=new Target();globalThis.window=w;globalThis.document=d;Object.defineProperty(globalThis,'performance',{value:{now:()=>now},configurable:true});
+ const dispatch=(type,props)=>{const event=Object.assign(new Event(type,{cancelable:true}),props);w.dispatchEvent(event);assert.equal(event.defaultPrevented,false);};
+ const input=createParticleInput();
+ try{
+  dispatch('pointermove',{pointerType:'mouse',pointerId:1,clientX:300,clientY:200});assert.equal(input.sample(600,400)[2],1);
+  for(let i=0;i<20;i++){now+=50;dispatch('pointermove',{pointerType:'mouse',pointerId:1,clientX:100+i*15,clientY:200});}
+  assert.equal(input.sample(600,400).length,32);
+  dispatch('pointerdown',{pointerType:'touch',pointerId:7,clientX:300,clientY:200});dispatch('pointercancel',{pointerType:'touch',pointerId:7});
+  now+=50;dispatch('touchmove',{touches:[{identifier:7,clientX:320,clientY:230}]});assert.equal(input.sample(600,400)[2],1);
+  dispatch('touchend',{});now+=250;const fading=input.sample(600,400)[2];assert.ok(fading>0&&fading<1);
+  now+=5000;assert.ok(input.sample(600,400).every(value=>value===0));assert.ok(w.options.every(options=>options.passive===true));
+  input.dispose();dispatch('pointermove',{pointerType:'mouse',pointerId:1,clientX:300,clientY:200});assert.ok(input.sample(600,400).every(value=>value===0));
+ }finally{
+  input.dispose();globalThis.window=original.window;globalThis.document=original.document;Object.defineProperty(globalThis,'performance',{value:original.performance,configurable:true});
  }
-});
-
-test('sample jitter is reproducible and changes when the seed changes',()=>{
- const a=sampleShapePixels(image,100,8),b=sampleShapePixels(image,100,8),c=sampleShapePixels(image,100,9);
- assert.deepEqual(a,b);assert.notDeepEqual(a,c);
- assert.ok(new Set([...a].filter((_,i)=>i%4===0)).size>90);
-});
-
-test('empty silhouettes fail explicitly rather than generating invalid particle data',()=>{
- assert.throws(()=>sampleShapePixels({width:1,height:1,data:new Uint8ClampedArray(4)},20000),/píxeles visibles/);
-});
-
-test('desktop stays within the requested range and mobile reduces GPU work',()=>{
- const desktop=particleBudget(1440),mobile=particleBudget(390),tablet=particleBudget(1024,{coarse:true});
- assert.ok(desktop>=20000&&desktop<=60000);assert.ok(mobile<desktop);assert.ok(tablet<desktop);
- assert.ok(particleBudget(390,{memory:2})<=10000);assert.ok(PARTICLE_CONFIG.maxDpr<=2);
- assert.equal(particleBudget(1440,{}, {...PARTICLE_CONFIG,count:90000}),60000);
 });

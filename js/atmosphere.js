@@ -1,108 +1,142 @@
-export const ATMOSPHERE_CONFIG={backCount:150,frontCount:44,mobileBackCount:54,mobileFrontCount:16};
+import {PARTICLE_CONFIG as config,layerBudget} from './particle-config.js';
+import {createParticleInput} from './particle-input.js';
+import {gpuMath,emptyFragment,rgb,createGpuResources,createGpuState} from './particle-gpu.js';
 
-export const ambientVertex=`#version 300 es
+const galaxySource=`
+uniform vec2 uResolution;uniform float uTime,uLayer,uCount,uSpeed,uScroll,uParallax;
+vec3 galacticRoute(float id){
+ float aspect=uResolution.x/uResolution.y,seed=random(id+7.),depth=random(id+19.);
+ vec2 uv;
+ if(uLayer>.5){
+  float columns=ceil(sqrt(uCount*aspect)),rows=ceil(uCount/columns);
+  vec2 cell=vec2(mod(id,columns),floor(id/columns));
+  vec2 drift=vec2(sin(uTime*.035*uSpeed+seed*6.28),cos(uTime*.028*uSpeed+seed*9.))*.21;
+  uv=(cell+vec2(.32+random(id+31.)*.36,.32+random(id+43.)*.36)+drift)/vec2(columns,rows);
+ }else{
+  uv=fract(vec2(random(id+11.),random(id+13.))+uTime*uSpeed*vec2((random(id+29.)-.5)*.002,.0008+seed*.0018));
+ }
+ float parallax=uScroll*uParallax*(.12+depth*.5)*(uLayer>.5?1.4:.5);
+ return vec3((uv.x-.5)*aspect,uv.y-.5+parallax,depth);
+}
+`;
+const galaxySimulation=`#version 300 es
 precision highp float;
-uniform vec2 uResolution;
-uniform float uTime;
-uniform float uDpr;
-uniform float uLayer;
-uniform float uScroll;
-uniform vec3 uPointer;
-out float vOpacity;
-out float vSeed;
-out float vDefocus;
-float random(float n){return fract(sin(n*127.1+311.7)*43758.5453);}
+layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
+uniform float uDt,uSpring,uDamping,uReset;
+out vec3 nextPosition,nextVelocity;
+`+gpuMath+galaxySource+`
 void main(){
- float id=float(gl_VertexID)+1.,seed=random(id),depth=random(id+11.);
- vec2 origin=vec2(random(id+3.),random(id+7.));
- vec2 velocity=vec2((random(id+13.)-.5)*.008,.003+random(id+17.)*.008);
- vec2 uv=fract(origin+uTime*velocity+vec2(0.,uScroll*(.3+uLayer)*.000012));
- uv+=vec2(sin(uTime*.08+seed*6.28)*.009,cos(uTime*.06+seed*9.)*.006);
- float aspect=uResolution.x/uResolution.y;
- vec2 p=vec2((uv.x-.5)*aspect,uv.y-.5);
- vec2 away=p-uPointer.xy;float distance=length(away);
- float influence=pow(1.-smoothstep(0.,.15,distance),2.)*uPointer.z;
- p+=normalize(away+vec2(.00001,0.))*influence*.035*(.4+uLayer);
- gl_Position=vec4(p.x*2./aspect,p.y*2.,0.,1.);
- vDefocus=uLayer>.5&&depth>.86?1.:0.;
- gl_PointSize=uDpr*mix(.8,2.,depth)*(uLayer>.5?1.5:1.)*(vDefocus>.5?2.4:1.);
- vOpacity=(uLayer>.5?.25+depth*.40:.18+depth*.22)*(vDefocus>.5?.38:1.);
- vSeed=seed;
+ vec3 base=galacticRoute(float(gl_VertexID));
+ vec3 force=-aPosition*uSpring-aVelocity*uDamping+pointerForce(vec3(base.xy+aPosition.xy,0.));
+ nextVelocity=aVelocity+force*uDt;
+ nextPosition=aPosition+nextVelocity*uDt;
+ if(uReset>.5){nextPosition=vec3(0.);nextVelocity=vec3(0.);}
+ gl_Position=vec4(0.);
 }`;
-export const ambientFragment=`#version 300 es
-precision mediump float;
-in float vOpacity;
-in float vSeed;
-in float vDefocus;
-out vec4 color;
+const galaxyVertex=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
+uniform float uDpr,uSize,uOpacity,uTwinkle;
+uniform vec4 uMasks[12];uniform int uMaskCount;
+out float vOpacity,vDepth,vNear;
+`+gpuMath+galaxySource+`
 void main(){
- vec2 uv=gl_PointCoord*2.-1.;float radius=dot(uv,uv);if(radius>1.)discard;
- float glow=exp(-radius*(vDefocus>.5?2.8:4.))*(1.-smoothstep(.65,1.,radius));
- vec3 tint=mix(vec3(.50,.67,.76),vec3(.72,.94,1.),step(.84,vSeed));
- color=vec4(tint,glow*vOpacity);
+ float id=float(gl_VertexID),seed=random(id+7.);vec3 route=galacticRoute(id);vec2 p=route.xy+aPosition.xy;
+ gl_Position=vec4(p.x*2.*uResolution.y/uResolution.x,p.y*2.,0.,1.);
+ float edge=(1.-smoothstep(.46,.52,abs(p.y)))*(1.-smoothstep(.46,.52,abs(p.x*uResolution.y/uResolution.x)));
+ float twinkle=1.-uTwinkle+uTwinkle*(.5+.5*sin(uTime*(.3+seed*.7)+seed*41.));
+ vOpacity=uOpacity*twinkle*edge*(.42+route.z*.58);vDepth=route.z;vNear=uLayer;
+ if(uLayer>.5){
+  // One star per screen cell plus a text mask avoids foreground clusters.
+  for(int i=0;i<12;i++){
+   if(i>=uMaskCount)break;vec4 r=uMasks[i];
+   vec2 d=max(max(r.xy-p,p-r.zw),vec2(0.));
+   vOpacity*=mix(.14,1.,smoothstep(0.,.025,length(d)));
+  }
+ }
+ gl_PointSize=max(1.,uDpr*uSize*(.65+route.z*.7));
+}`;
+const galaxyFragment=`#version 300 es
+precision mediump float;
+in float vOpacity,vDepth,vNear;uniform vec3 uColor;out vec4 color;
+void main(){
+ vec2 p=gl_PointCoord*2.-1.;float r=dot(p,p);if(r>1.)discard;
+ float glow=exp(-r*(vNear>.5?2.5:4.))*(1.-smoothstep(.65,1.,r));
+ color=vec4(mix(uColor,vec3(.82,.93,1.),vDepth*.28),glow*vOpacity);
 }`;
 
-function createLayer(canvas,near){
- const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'low-power'});
- if(!gl)return null;
- const program=gl.createProgram(),shaders=[];let vao=null,disposed=false,width=1,height=1,dpr=1,count=0;
- function dispose(){if(disposed)return;disposed=true;if(vao)gl.deleteVertexArray(vao);gl.deleteProgram(program);shaders.forEach(shader=>gl.deleteShader(shader));}
+export function createGalaxyRenderer(canvas,front=false){
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'low-power'});if(!gl)return null;
+ const resources=createGpuResources(gl);let state=null,width=0,height=0,count=0,dpr=1,lastTime=null,accumulator=0,reset=true,disposed=false;
+ const names=['uResolution','uTime','uLayer','uCount','uSpeed','uScroll','uParallax','uDt','uSpring','uDamping','uReset','uTrail[0]','uRadius','uRepulsion','uDpr','uSize','uOpacity','uTwinkle','uColor','uMasks[0]','uMaskCount'];
+ function dispose(){if(disposed)return;disposed=true;state?.dispose();resources.dispose();}
  try{
-  for(const [type,code]of[[gl.VERTEX_SHADER,ambientVertex],[gl.FRAGMENT_SHADER,ambientFragment]]){
-   const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,code);gl.compileShader(shader);
-   if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));gl.attachShader(program,shader);
-  }
-  gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
-  vao=gl.createVertexArray();
-  const u=Object.fromEntries(['uResolution','uTime','uDpr','uLayer','uScroll','uPointer'].map(name=>[name,gl.getUniformLocation(program,name)]));
-  return {
-   resize(){
-    width=innerWidth;height=innerHeight;dpr=Math.min(devicePixelRatio||1,1.5);
-    count=width<700?(near?ATMOSPHERE_CONFIG.mobileFrontCount:ATMOSPHERE_CONFIG.mobileBackCount):(near?ATMOSPHERE_CONFIG.frontCount:ATMOSPHERE_CONFIG.backCount);
-    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);gl.viewport(0,0,canvas.width,canvas.height);canvas.dataset.ambientCount=String(count);
+  const simulation=resources.program(galaxySimulation,emptyFragment,names,true),points=resources.program(galaxyVertex,galaxyFragment,names);
+  const api={
+   resize(force=false){
+    const w=innerWidth,h=innerHeight,budget=layerBudget(w,front,{coarse:matchMedia('(pointer:coarse)').matches}),ratio=Math.min(devicePixelRatio||1,config.maxDpr,1.25);
+    if(!force&&width===w&&height===h&&budget===count&&ratio===dpr)return;
+    width=w;height=h;count=budget;dpr=ratio;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);gl.viewport(0,0,canvas.width,canvas.height);
+    state?.dispose();state=createGpuState(gl,count);reset=true;lastTime=null;accumulator=0;canvas.dataset.ambientCount=String(count);
    },
-   draw(time,pointer,reduced){
-    if(disposed||gl.isContextLost())return;
-    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(program);gl.bindVertexArray(vao);
-    gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uTime,reduced?0:time);gl.uniform1f(u.uDpr,dpr);gl.uniform1f(u.uLayer,near?1:0);gl.uniform1f(u.uScroll,reduced?0:scrollY);
-    gl.uniform3f(u.uPointer,pointer.x*width/height,-pointer.y,reduced?0:pointer.active);
-    gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.POINTS,0,reduced?Math.min(count,18):count);gl.disable(gl.BLEND);gl.bindVertexArray(null);
+   draw(time,trail,masks=new Float32Array(48),maskCount=0){
+    if(disposed||gl.isContextLost()||!state)return;
+    const dt=lastTime===null?0:Math.max(0,Math.min(1/30,time-lastTime));lastTime=time;accumulator+=dt;
+    function common(target){
+     gl.useProgram(target.program);const u=target.u;
+     gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform1f(u.uTime,time);gl.uniform1f(u.uLayer,front?1:0);gl.uniform1f(u.uCount,count);
+     gl.uniform1f(u.uSpeed,config.galaxySpeed);gl.uniform1f(u.uScroll,scrollY/height);gl.uniform1f(u.uParallax,config.parallax);
+     gl.uniform4fv(u['uTrail[0]'],trail);gl.uniform1f(u.uRadius,config.repulsionRadius/height);gl.uniform1f(u.uRepulsion,config.galaxyRepulsion);
+    }
+    common(simulation);gl.uniform1f(simulation.u.uDt,1/60);gl.uniform1f(simulation.u.uSpring,config.galaxySpring);gl.uniform1f(simulation.u.uDamping,config.galaxyDamping);
+    let steps=Math.min(2,Math.floor((accumulator+1e-8)*60));if(reset)steps=Math.max(steps,1);
+    for(let i=0;i<steps;i++){gl.uniform1f(simulation.u.uReset,reset?1:0);state.step();reset=false;}accumulator=Math.max(0,accumulator-steps/60);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);common(points);const u=points.u;
+    gl.uniform1f(u.uDpr,dpr);gl.uniform1f(u.uSize,front?config.frontSize:config.backSize);gl.uniform1f(u.uOpacity,front?config.frontOpacity:config.backOpacity);gl.uniform1f(u.uTwinkle,config.twinkle);
+    gl.uniform3fv(u.uColor,rgb(front?config.frontColor:config.backColor));gl.uniform4fv(u['uMasks[0]'],masks);gl.uniform1i(u.uMaskCount,front?maskCount:0);
+    state.bind();gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.POINTS,0,count);gl.disable(gl.BLEND);gl.bindVertexArray(null);
+    canvas.dataset.animationTime=time.toFixed(2);
    },dispose
-  };
- }catch(error){dispose();console.warn('La atmósfera decorativa usa su fondo estático.',error.message);return null;}
+  };return api;
+ }catch(error){dispose();console.warn('La galaxia conserva su fondo atmosférico.',error.message);return null;}
 }
 
-export function initAtmosphere(){
- const controller=new AbortController(),preference=matchMedia('(prefers-reduced-motion:reduce)');
- const on=(target,event,callback,options={})=>target.addEventListener(event,callback,{...options,signal:controller.signal});
- const back=document.createElement('canvas'),front=document.createElement('canvas');
- back.className='ambient-layer ambient-layer--back';front.className='ambient-layer ambient-layer--front';
- for(const canvas of [back,front]){canvas.setAttribute('aria-hidden','true');canvas.setAttribute('role','presentation');}
- document.body.prepend(back);document.body.append(front);
- let layers=[createLayer(back,false),createLayer(front,true)],raf=0,previous=0,time=0,paused=false,disposed=false;
- const pointer={x:0,y:0,active:0};
+export function initAtmosphere(sharedInput=null){
+ const controller=new AbortController(),input=sharedInput||createParticleInput();
+ const on=(target,event,callback,options={})=>target.addEventListener(event,callback,{passive:true,...options,signal:controller.signal});
+ const back=document.createElement('canvas'),front=document.createElement('canvas'),nebula=document.createElement('div');
+ back.className='ambient-layer ambient-layer--back';front.className='ambient-layer ambient-layer--front';nebula.className='galaxy-nebula';
+ for(const element of [back,front,nebula])element.setAttribute('aria-hidden','true');document.body.prepend(nebula,back);document.body.append(front);
+ let layers=[createGalaxyRenderer(back),createGalaxyRenderer(front,true)],raf=0,previous=0,time=0,disposed=false,lastMasks=-1000,palette='';
+ const masks=new Float32Array(48);let maskCount=0;
+ function updateMasks(now){
+  if(now-lastMasks<180)return;lastMasks=now;maskCount=0;masks.fill(0);
+  const candidates=document.querySelectorAll('h1,h2,.cinema-description,.about-copy>p,.contact-lead');
+  for(const element of candidates){
+   if(maskCount>=12)break;if(element.closest('[aria-hidden="true"]'))continue;
+   const r=element.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight||r.width===0||r.height===0)continue;
+   masks.set([(r.left-12-innerWidth*.5)/innerHeight,(innerHeight*.5-r.bottom-12)/innerHeight,(r.right+12-innerWidth*.5)/innerHeight,(innerHeight*.5-r.top+12)/innerHeight],maskCount++*4);
+  }
+ }
  function request(){if(!disposed&&!document.hidden&&!raf)raf=requestAnimationFrame(draw);}
  function draw(now){
-  raf=0;if(disposed)return;
-  const elapsed=previous?Math.min((now-previous)/1000,.05):0;previous=now;
-  if(!paused&&!preference.matches)time+=elapsed;
-  layers.forEach(layer=>layer?.draw(time,pointer,preference.matches));
-  if(!paused&&!preference.matches&&layers.some(Boolean))request();
+  raf=0;if(disposed||document.hidden)return;time+=previous?Math.min((now-previous)/1000,.05):0;previous=now;
+  updateMasks(now);const trail=input.sample(innerWidth,innerHeight);
+  layers[0]?.draw(time,trail);layers[1]?.draw(time,trail,masks,maskCount);
+  const nextPalette=config.nebulaColorA+config.nebulaColorB+config.nebulaColorC;
+  if(nextPalette!==palette){palette=nextPalette;nebula.style.background='radial-gradient(ellipse at 23% 30%, '+config.nebulaColorA+'88, transparent 52%),radial-gradient(ellipse at 77% 63%, '+config.nebulaColorB+'80, transparent 48%),radial-gradient(ellipse at 56% 16%, '+config.nebulaColorC+'60, transparent 44%)';}
+  nebula.style.opacity=String(config.nebulaOpacity);nebula.style.transform=`translate3d(${Math.sin(time*.017)*2}%,${Math.cos(time*.013)*2}%,0) scale(1.08)`;
+  request();
  }
- function resize(){layers.forEach(layer=>layer?.resize());previous=0;request();}
+ function resize(force=false){layers.forEach(layer=>layer?.resize(force));lastMasks=-1000;request();}
  function dispose(){
-  if(disposed)return;disposed=true;controller.abort();if(raf)cancelAnimationFrame(raf);raf=0;
-  layers.forEach(layer=>layer?.dispose());layers=[];back.remove();front.remove();
+  if(disposed)return;disposed=true;controller.abort();if(raf)cancelAnimationFrame(raf);layers.forEach(layer=>layer?.dispose());layers=[];back.remove();front.remove();nebula.remove();if(!sharedInput)input.dispose();
  }
- on(window,'pointermove',event=>{if(event.pointerType==='mouse'){pointer.x=event.clientX/innerWidth-.5;pointer.y=event.clientY/innerHeight-.5;pointer.active=1;}},{passive:true});
- on(document,'pointerleave',()=>{pointer.active=0;});on(window,'blur',()=>{pointer.active=0;});
- on(window,'resize',resize,{passive:true});on(window,'scroll',request,{passive:true});
+ on(window,'resize',()=>resize());on(window,'particle-config-change',()=>resize(true));
  on(document,'visibilitychange',()=>{previous=0;if(document.hidden&&raf){cancelAnimationFrame(raf);raf=0;}else request();});
- on(preference,'change',()=>{previous=0;request();});
  for(const [index,canvas]of[back,front].entries()){
-  on(canvas,'webglcontextlost',event=>{event.preventDefault();layers[index]?.dispose();layers[index]=null;});
-  on(canvas,'webglcontextrestored',()=>{layers[index]=createLayer(canvas,index===1);resize();});
+  on(canvas,'webglcontextlost',event=>{event.preventDefault();layers[index]?.dispose();layers[index]=null;},{passive:false});
+  on(canvas,'webglcontextrestored',()=>{layers[index]=createGalaxyRenderer(canvas,index===1);resize();});
  }
- resize();
- return {dispose,setPaused(value){paused=value;previous=0;if(raf)cancelAnimationFrame(raf);raf=0;request();}};
+ resize();return {dispose};
 }
