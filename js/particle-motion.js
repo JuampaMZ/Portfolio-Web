@@ -18,12 +18,20 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 // A safety envelope bounds the entire tube, not just its centerline.
 export function interlockGeometry(settings=config){
  const radius=clamp(settings.bandRadius,.12,.5),thickness=clamp(settings.bandThickness,.012,radius*.22),height=clamp(settings.bandHeight,.012,radius*.22);
- const tube=1.12*Math.max(thickness,height)+Math.min(settings.turbulence,.08)*.2,margin=.024;
- const minimum=4*Math.asin(clamp((2*tube+margin)/(2*radius),0,.85));
- const gap=Math.max(minimum,clamp(settings.ringGapDegrees,35,150)*Math.PI/180);
- const clearance=2*radius*Math.sin(gap/4)-2*tube-margin,breath=Math.min(Math.max(0,settings.ringBreath),Math.max(0,clearance)*.08);
+ const tube=1.12*Math.max(thickness,height)+Math.min(settings.turbulence,.08)*.2,margin=.012;
+ const tipScale=clamp(settings.ringTipScale,.2,.6),tipTaper=clamp(settings.ringTipTaper,.12,.3),reserve=radius*.04;
+ // A linear taper makes distance minus tube thickness concave: checking both
+ // ends of that interval bounds the full tube, including its diffuse edge.
+ const minimum=Math.max(4*Math.asin(clamp(((1+tipScale)*tube+margin+reserve)/(2*radius),0,.85)),4*Math.asin(clamp((2*tube+margin+reserve)/(2*radius),0,.85))-2*tipTaper);
+ const gap=Math.max(minimum,clamp(settings.ringGapDegrees,20,150)*Math.PI/180);
+ const clearance=Math.min(2*radius*Math.sin(gap/4)-(1+tipScale)*tube,2*radius*Math.sin(gap/4+tipTaper/2)-2*tube)-margin;
+ const breath=Math.min(Math.max(0,settings.ringBreath),Math.max(0,clearance)*.08);
  const maxRotation=Math.min(3*Math.PI/180,Math.max(0,clearance-2*breath)/(4*(radius+tube+breath)));
- return {radius,thickness,height,tube,gap,margin,breath,maxRotation};
+ return {radius,thickness,height,tube,gap,margin,breath,maxRotation,tipScale,tipTaper};
+}
+export function ringTubeScale(angle,index,geometry){
+ const delta=Math.abs(Math.atan2(Math.sin(angle-index*Math.PI),Math.cos(angle-index*Math.PI)));
+ return geometry.tipScale+(1-geometry.tipScale)*clamp((delta-geometry.gap/2)/geometry.tipTaper,0,1);
 }
 function limitedRotation(vector,from,to,maxAngle){
  const axis=cross(from,to),length=Math.hypot(...axis);if(length<1e-8)return vector;

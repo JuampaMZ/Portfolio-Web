@@ -3,10 +3,11 @@
 <h1>Verificación GPU del núcleo orbital</h1><button id="run">Ejecutar comprobaciones</button><pre id="result">Listo para comprobar.</pre><div id="canvases"></div>
 <script type="module">
 import {createCinemaRenderer} from '../js/cinema-renderer.js';
-import {initAtmosphere,createGalaxyRenderer} from '../js/atmosphere.js';
+import {initAtmosphere,createGalaxyRenderer,galaxySource} from '../js/atmosphere.js';
 import {createAuroraRenderer} from '../js/aurora-renderer.js';
-import {interlockedRings} from '../js/particle-motion.js';
+import {interlockedRings,bandBasis} from '../js/particle-motion.js';
 import {PARTICLE_CONFIG as config,introState} from '../js/particle-config.js';
+import {gpuMath,emptyFragment,createGpuResources,createGpuState} from '../js/particle-gpu.js';
 const output=document.querySelector('pre'),host=document.querySelector('#canvases');
 function tracked(){
  const canvas=document.createElement('canvas');host.append(canvas);
@@ -19,13 +20,13 @@ function tracked(){
  }
  let latest=null;const draw=gl.drawArrays.bind(gl);
  gl.drawArrays=(...args)=>{if(!gl.isEnabled(gl.RASTERIZER_DISCARD))latest=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);return draw(...args);};
- return {canvas,gl,resources,sample(){const data=new Float32Array(256*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
+ return {canvas,gl,resources,sample(offset=0,count=256){const data=new Float32Array(count*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,offset*24,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;},beam(){const p=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width*.735),Math.floor(canvas.height*.555),1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return p[0]+p[1]+p[2];}};
 }
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
 document.querySelector('button').addEventListener('click',async()=>{
  output.textContent='Ejecutando comprobaciones GPU…';await new Promise(requestAnimationFrame);
  const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
- const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null,foreground=null;const oldRadius=config.repulsionRadius;
+ const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null,foreground=null,travelState=null,travelResources=null;const oldRadius=config.repulsionRadius,oldHalo=config.planetHalo,oldTrail=config.planetTrail;
  try{
   control=createCinemaRenderer(a.canvas);perturbed=createCinemaRenderer(b.canvas);assert(Boolean(control&&perturbed),'Shaders de órbitas y nube compilados');
   control.resize(800,500);perturbed.resize(800,500);const empty=new Float32Array(32);
@@ -40,6 +41,12 @@ document.querySelector('button').addEventListener('click',async()=>{
   }
   assert(samples.every(values=>values.length>70&&Math.max(...values.map(v=>v.r))-Math.min(...values.map(v=>v.r))>.03&&Math.max(...values.map(v=>v.y))-Math.min(...values.map(v=>v.y))>.025),'Dos bandas volumétricas presentes en planos distintos');
   assert(samples.every((values,index)=>values.filter(v=>Math.abs(Math.atan2(Math.sin(v.angle-index*Math.PI),Math.cos(v.angle-index*Math.PI)))>scene.geometry.gap/2-.15).length>values.length*.94),'Los huecos opuestos quedan abiertos en la simulación GPU');assert(dist(start,assembled)>.1,'Ensamblado gradual desde posiciones dispersas');
+  const ringCount=Number(a.canvas.dataset.ringCount),gapCount=Number(a.canvas.dataset.gapCount),vortexOffset=ringCount+gapCount,vortex=a.sample(vortexOffset,128),gapFlow=a.sample(ringCount,Math.min(96,gapCount));
+  let closeVortex=0,flatVortex=0,flowInGap=0;
+  for(let i=0;i<vortex.length;i+=6){const p=[0,1,2].map(j=>(vortex[i+j]-center[j])/1.06);if(Math.hypot(...p)<.14)closeVortex++;if(Math.abs(p.reduce((sum,v,j)=>sum+v*pose.direction[j],0))<.03)flatVortex++;}
+  assert(closeVortex>120&&flatVortex>120,'Vórtice separado, pequeño y perpendicular al rayo en GPU');
+  for(let i=0;i<gapFlow.length;i+=6){const id=ringCount+i/6,m=scene.frames[id%2].basis,p=[0,1,2].map(j=>(gapFlow[i+j]-center[j])/1.06),x=m[0]*p[0]+m[1]*p[1]+m[2]*p[2],z=m[6]*p[0]+m[7]*p[1]+m[8]*p[2],angle=Math.atan2(z,x)-id%2*Math.PI;if(Math.abs(Math.atan2(Math.sin(angle),Math.cos(angle)))<scene.geometry.gap/2+.15)flowInGap++;}
+  assert(flowInGap>gapFlow.length/6*.94&&gapCount<ringCount*.02,'Flujo escaso cruza únicamente la abertura de cada C');
   assert(a.beam()>startBeam+200&&introState(3.45).text===0,'El rayo crece antes de la entrada de textos');
   assert(dist(a.sample(),b.sample())<.00001,'Simulaciones independientes reproducibles');
   const trail=new Float32Array(32);trail.set([assembled[0]/(1-assembled[2]*.38),assembled[1]/(1-assembled[2]*.38),1,1]);
@@ -58,6 +65,22 @@ document.querySelector('button').addEventListener('click',async()=>{
   assert(a.resources.get('Buffer').size===2&&a.resources.get('VertexArray').size===2&&a.resources.get('TransformFeedback').size===2,'Resize libera los buffers anteriores');
   assert(a.gl.getError()===a.gl.NO_ERROR&&b.gl.getError()===b.gl.NO_ERROR,'Núcleo sin errores WebGL');
   control.dispose();perturbed.dispose();assert([...a.resources.values(),...b.resources.values()].every(values=>values.size===0),'Desmontaje libera todos los recursos del núcleo');
+  const travel=tracked(),gl=travel.gl;travelResources=createGpuResources(gl);
+  const routeVertex=`#version 300 es
+precision highp float;out vec3 nextPosition,nextVelocity;
+`+gpuMath+galaxySource+`
+void main(){Journey trip=journey(float(gl_VertexID),uTime);nextPosition=trip.position;nextVelocity=vec3(trip.direction,trip.visibility);gl_Position=vec4(0.);}`;
+  const route=travelResources.program(routeVertex,emptyFragment,['uResolution','uTime','uLayer','uCount','uSmallCount','uSpeed','uDepthRatio','uMediumSpeed','uFrontSpeed'],true);travelState=createGpuState(gl,256);gl.useProgram(route.program);
+  gl.uniform2f(route.u.uResolution,800,500);for(const [key,value]of Object.entries({uLayer:0,uCount:256,uSmallCount:256,uSpeed:config.travelSpeed,uDepthRatio:config.depthTravelRatio,uMediumSpeed:config.mediumSpeed,uFrontSpeed:config.frontSpeed}))gl.uniform1f(route.u[key],value);
+  const travelFrame=time=>{gl.uniform1f(route.u.uTime,time);travelState.step();travelState.bind();const data=new Float32Array(256*6),buffer=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);return data;};
+  const trip0=travelFrame(0),trip1=travelFrame(.5),trip2=travelFrame(1),tripLater=travelFrame(90);let linear=0,depthTravel=0,newCourses=0;
+  for(let i=0;i<trip0.length;i+=6){
+   if(Math.hypot(trip0[i+3]-trip2[i+3],trip0[i+4]-trip2[i+4])<.00001&&Math.hypot(trip2[i]-trip1[i],trip2[i+1]-trip1[i+1])>.00001&&Math.hypot(trip2[i]-2*trip1[i]+trip0[i],trip2[i+1]-2*trip1[i+1]+trip0[i+1])<.00001)linear++;
+   if(Math.abs(trip2[i+2]-trip0[i+2])>.00001)depthTravel++;
+   if(Math.hypot(tripLater[i+3]-trip0[i+3],tripLater[i+4]-trip0[i+4])>.01)newCourses++;
+  }
+  assert(linear>245,'Viajes largos con dirección y velocidad constantes entre entradas');assert(depthTravel>40,'Una proporción de cuerpos viaja en profundidad');assert(newCourses>30,'Al reaparecer se generan trayectorias nuevas');assert([...tripLater].every(Number.isFinite)&&gl.getError()===gl.NO_ERROR,'Viajes finitos sin errores WebGL');
+  travelState.dispose();travelResources.dispose();assert([...travel.resources.values()].every(values=>values.size===0),'Desmontaje libera los recursos de la prueba de viaje');
   const g=tracked();field=createGalaxyRenderer(g.canvas);field.resize();config.repulsionRadius=5000;
   field.draw(0,empty);const wide=new Float32Array(32);wide.set([0,0,1,1]);
   for(let i=1;i<=30;i++)field.draw(i/60,wide);
@@ -70,6 +93,7 @@ document.querySelector('button').addEventListener('click',async()=>{
   const near=tracked();foreground=createGalaxyRenderer(near.canvas,true);foreground.resize();
   const foregroundAlpha=()=>{const pixels=new Uint8Array(near.canvas.width*near.canvas.height*4);near.gl.readPixels(0,0,near.canvas.width,near.canvas.height,near.gl.RGBA,near.gl.UNSIGNED_BYTE,pixels);let sum=0;for(let i=3;i<pixels.length;i+=4)sum+=pixels[i];return sum;};
   foreground.draw(0,empty);const unmasked=foregroundAlpha();assert(unmasked>100,'Bokeh frontal visible en GPU');
+  config.planetHalo=0;config.planetTrail=0;foreground.draw(0,empty);assert(foregroundAlpha()<unmasked,'Halo y estela tienen controles independientes efectivos');config.planetHalo=oldHalo;config.planetTrail=oldTrail;
   const textMask=new Float32Array(48);textMask.set([-10,-10,10,10]);foreground.draw(0,empty,textMask,1);
   assert(foregroundAlpha()<unmasked*.2,'La capa frontal protege el texto y evita concentraciones');
   assert(near.gl.getError()===near.gl.NO_ERROR,'Bokeh frontal sin errores WebGL');foreground.dispose();assert([...near.resources.values()].every(values=>values.size===0),'Desmontaje libera los recursos frontales');
@@ -91,6 +115,6 @@ document.querySelector('button').addEventListener('click',async()=>{
   atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.aurora-layer').length===0,'Desmontaje retira canvas, nebulosa y listeners');
   output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
  }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);}
- finally{config.repulsionRadius=oldRadius;control?.dispose();perturbed?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
+ finally{config.repulsionRadius=oldRadius;config.planetHalo=oldHalo;config.planetTrail=oldTrail;travelState?.dispose();travelResources?.dispose();control?.dispose();perturbed?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
 });
 </script></html>

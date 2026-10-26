@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PARTICLE_CONFIG as config} from '../js/particle-config.js';
-import {beamPose,bandBasis,beamEndpoints,interlockGeometry,interlockedRings} from '../js/particle-motion.js';
+import {beamPose,bandBasis,beamEndpoints,interlockGeometry,interlockedRings,ringTubeScale} from '../js/particle-motion.js';
 import {isMobileSensorDevice,relativeTilt,tiltOffset,createDeviceTilt} from '../js/particle-orientation.js';
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0),distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 
@@ -36,12 +36,12 @@ test('both thick C tubes retain clearance across hourglass motion, independent l
    const u=[...frame.basis.slice(0,3)],n=[...frame.basis.slice(3,6)],v=[...frame.basis.slice(6,9)];
    assert.ok(Math.abs(dot(u,n))<1e-6&&Math.abs(dot(v,n))<1e-6);
    assert.ok(Math.abs(dot(n,pose.direction))*frame.radius>g.tube+.06,'The beam clears each thick tube');
-   return Array.from({length:85},(_,i)=>{const a=index*Math.PI+g.gap/2+i/84*(2*Math.PI-g.gap);return u.map((x,j)=>(x*Math.cos(a)+v[j]*Math.sin(a))*frame.radius);});
+   return Array.from({length:85},(_,i)=>{const a=index*Math.PI+g.gap/2+i/84*(2*Math.PI-g.gap);return {position:u.map((x,j)=>(x*Math.cos(a)+v[j]*Math.sin(a))*frame.radius),tube:g.tube*ringTubeScale(a,index,g)};});
   });
   const normalA=[...frames[0].basis.slice(3,6)],normalB=[...frames[1].basis.slice(3,6)];
   independent||=Math.abs(dot(normalA,normalB))>.0001;
-  let closest=Infinity;for(const a of points[0])for(const b of points[1])closest=Math.min(closest,distance(a,b));
-  assert.ok(closest-2*g.tube>g.margin,'The full tube thickness clears the opposite C');
+  let closest=Infinity;for(const a of points[0])for(const b of points[1])closest=Math.min(closest,distance(a.position,b.position)-a.tube-b.tube);
+  assert.ok(closest>g.margin,'The tapered tube clears the opposite C throughout its full thickness');
  }
  assert.ok(independent,'Each ring has its own bounded motion');
 });
@@ -49,7 +49,7 @@ test('the safety envelope widens undersized gaps and limits excessive tube and w
  for(const radius of [.18,.3,.4]){
   const g=interlockGeometry({...config,bandRadius:radius,bandThickness:.14,bandHeight:.14,ringGapDegrees:15,ringBreath:.1});
   assert.ok(g.thickness<=radius*.22);assert.ok(g.height<=radius*.22);
-  assert.ok(2*radius*Math.sin(g.gap/4)-2*g.tube-2*g.breath-2*(radius+g.tube+g.breath)*Math.sin(g.maxRotation)>=g.margin-1e-8);
+  assert.ok(Math.min(2*radius*Math.sin(g.gap/4)-(1+g.tipScale)*g.tube,2*radius*Math.sin(g.gap/4+g.tipTaper/2)-2*g.tube)-2*g.breath-2*(radius+g.tube+g.breath)*Math.sin(g.maxRotation)>=g.margin-1e-8);
  }
 });
 
@@ -83,4 +83,9 @@ test('denial, unavailable sensors, Android and desktop retain a safe non-sensor 
  const android=environment(null,'Android Chrome'),a=createDeviceTilt({...android,now:()=>0});event(android.win,'deviceorientation',{beta:60,gamma:4});assert.equal(a.status,'active');a.dispose();
  const desktop=environment(()=>{throw new Error('must not ask');},'Windows Chrome'),pc=createDeviceTilt({...desktop,now:()=>0});event(desktop.win,'touchend');assert.equal(pc.status,'desktop');pc.dispose();
  const absent=new EventTarget(),fallback=createDeviceTilt({win:absent,nav:{userAgent:'iPhone'},now:()=>0});assert.equal(fallback.status,'unsupported');fallback.dispose();
+});
+
+test('the opening is substantially smaller while retaining a full thick band away from its tips',()=>{
+ const g=interlockGeometry();assert.ok(g.gap*180/Math.PI<55);assert.ok(Math.abs(ringTubeScale(g.gap/2,0,g)-g.tipScale)<1e-8);
+ assert.equal(ringTubeScale(g.gap/2+g.tipTaper,0,g),1);assert.equal(ringTubeScale(Math.PI+g.gap/2+g.tipTaper,1,g),1);
 });
