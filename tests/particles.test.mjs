@@ -41,8 +41,8 @@ test('mouse and touch share passive input, retain a bounded wake and release it 
  }
 });
 
-test('the independent vortex and sparse gap flow stay inside the mobile and desktop particle budgets',()=>{
- for(const width of [390,1440]){const total=particleBudget(width),groups=nucleusGroups(total,width);assert.equal(groups.ring+groups.gap+groups.vortex,total);assert.ok(groups.vortex>0&&groups.ring>groups.vortex*5);assert.ok(groups.gap>0&&groups.gap<groups.ring*.02);}
- assert.ok(nucleusGroups(10000,390).vortex<nucleusGroups(32000,1440).vortex);
+test('the axial hourglass and fine gap thread stay inside the mobile and desktop particle budgets',()=>{
+ for(const width of [390,1440]){const total=particleBudget(width),groups=nucleusGroups(total,width);assert.equal(groups.ring+groups.gap+groups.dust,total);assert.ok(groups.dust>0&&groups.ring>groups.dust*5);assert.ok(groups.gap>0&&groups.gap<groups.ring*.02);}
+ assert.ok(nucleusGroups(10000,390).dust<nucleusGroups(32000,1440).dust);
  const without=nucleusGroups(32000,1440,{}, {...PARTICLE_CONFIG,gapDensity:0});assert.equal(without.gap,0);
 });

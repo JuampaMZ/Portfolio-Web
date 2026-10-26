@@ -6,8 +6,9 @@ import {gpuMath,fullscreenVertex,emptyFragment,rgb,createGpuResources,createGpuS
 export {PARTICLE_CONFIG,particleBudget} from './particle-config.js';
 
 const orbitalSource=`
-uniform vec4 uPlacement;uniform vec3 uCenter;uniform mat3 uRingBasisA,uRingBasisB,uVortexBasis;uniform vec2 uRingRadii;
-uniform float uRingCount,uGapCount,uGapOpacity,uTipScale,uTipTaper,uVortexRadius,uVortexSpeed,uVortexTurbulence;
+uniform vec4 uPlacement;uniform vec3 uCenter;uniform mat3 uRingBasisA,uRingBasisB,uBeamBasis;uniform vec2 uRingRadii;
+uniform float uRingCount,uGapCount,uGapOpacity,uNeckClearance,uTubeBound;
+uniform float uDustLength,uDustWaist,uDustEndRadius,uDustSpin,uDustFlow,uDustOpacity;
 uniform float uFlowSpeed,uGap,uTipFade,uBandRadius,uBandThickness,uBandHeight,uBandShear,uTurbulence,uTurbulenceSpeed;
 vec2 bandTube(float id){
  float radius=min(1.12,sqrt(-2.*log(max(random(id+15.),.00001)))*.36),angle=random(id+18.)*6.2831853;
@@ -22,24 +23,33 @@ float ringPhase(float id,float time){
  return fract(random(id+4.)+time*speed/(inGap(id)?uGap:6.2831853-uGap));
 }
 float tipOpacity(float id,float time){float phase=ringPhase(id,time),fade=inGap(id)?.12:uTipFade;return smoothstep(0.,fade,phase)*(1.-smoothstep(1.-fade,1.,phase));}
-float tipScale(float phase){float distance=min(phase,1.-phase)*(6.2831853-uGap);return mix(uTipScale,1.,clamp(distance/uTipTaper,0.,1.));}
-vec3 vortexLocal(float id,float time){
- float seed=random(id+23.),phase=time*(.19+seed*.075)+random(id+31.)*6.2831853;
- float breath=.5+.5*sin(phase),radius=uVortexRadius*(.12+.88*pow(breath,1.3))*(.55+seed*.45);
- float angle=random(id+4.)*6.2831853+time*uVortexSpeed*(.75+seed*.6)+(1.-breath)*5.;
- vec3 p=vec3(cos(angle)*radius,(random(id+43.)-.5)*uVortexRadius*.3,sin(angle)*radius);
- return p+curlNoise(p*24.,time*.6)*uVortexTurbulence;
+float tipScale(float phase){
+ float angle=uGap*.5+phase*(6.2831853-uGap),c=cos(angle);
+ float distance=uBandRadius*sqrt(max(0.,2.-2.*max(c,-c*cos(uGap*.5))));
+ return min(1.,uNeckClearance*distance/uTubeBound);
+}
+float dustPhase(float id,float time){
+ float direction=random(id+43.)>.5?1.:-1.;
+ return fract(random(id+23.)+time*uDustFlow/max(.2,uDustLength)*direction);
+}
+vec3 beamDustLocal(float id,float time){
+ float phase=dustPhase(id,time),axial=phase*2.-1.;
+ float cone=(sqrt(axial*axial+.0025)-.05)/.95124922;
+ float envelope=mix(uDustWaist,uDustEndRadius,cone);
+ float radius=envelope*(.48+.52*sqrt(random(id+31.)));
+ float angle=random(id+4.)*6.2831853+time*uDustSpin*(.9+random(id+17.)*.2)+axial*3.92699082;
+ return vec3(cos(angle)*radius,axial*uDustLength*.5,sin(angle)*radius);
 }
 vec3 orbitalTarget(float id,float time){
  vec3 p;
  if(inBand(id)||inGap(id)){
   bool second=secondRing(id),gap=inGap(id);vec2 tube=bandTube(id);float phase=ringPhase(id,time);
   float angle=(second?3.14159265:0.)+(gap?-uGap*.5:uGap*.5)+phase*(gap?uGap:6.2831853-uGap);
-  float taper=gap?.27:tipScale(phase),radius=(second?uRingRadii.y:uRingRadii.x)+tube.x*uBandThickness*taper;
+  float taper=gap?.025:tipScale(phase),radius=(second?uRingRadii.y:uRingRadii.x)+tube.x*uBandThickness*taper;
   p=vec3(cos(angle)*radius,tube.y*uBandHeight*taper,sin(angle)*radius);
   p+=curlNoise(p*8.,time*uTurbulenceSpeed*.52)*min(uTurbulence,.08)*.10*taper;
   p=(second?uRingBasisB:uRingBasisA)*p;
- }else p=uVortexBasis*vortexLocal(id,time);
+ }else p=uBeamBasis*beamDustLocal(id,time);
  return p*uPlacement.z+uCenter;
 }
 vec3 nucleusPointer(vec3 p){float perspective=1./max(.55,1.-p.z*.38);vec3 force=pointerForce(vec3(p.xy*perspective,p.z));force.xy/=perspective;return force;}
@@ -61,7 +71,7 @@ void main(){
   dispersed.xy=mat2(cos(spiral),-sin(spiral),sin(spiral),cos(spiral))*dispersed.xy;
   nextPosition=mix(dispersed,target,ease);nextVelocity=vec3(0.);
  }// Recycle only while both tips are invisible; never integrate across the gap.
- else if(uReset>.5||((inBand(id)||inGap(id))&&abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5)){nextPosition=target;nextVelocity=vec3(0.);}
+ else if(uReset>.5||((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5)){nextPosition=target;nextVelocity=vec3(0.);}
  else{
   vec3 force=(target-aPosition)*uSpring+-aVelocity*uDamping+nucleusPointer(aPosition);
   nextVelocity=aVelocity+force*uDt;nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
@@ -73,30 +83,33 @@ const pointVertex=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
 uniform vec2 uResolution;uniform float uSize,uDpr,uTime;
-out float vEnergy,vTint,vActivity,vRing;
+out float vEnergy,vTint,vActivity,vRing,vCoreScale;
 `+gpuMath+orbitalSource+`
 void main(){
  float id=float(gl_VertexID),seed=random(id+1.);bool band=inBand(id),gap=inGap(id);vec3 p=aPosition;float perspective=1./max(.55,1.-p.z*.38);
  gl_Position=vec4(p.x*perspective*2.*uResolution.y/uResolution.x,p.y*perspective*2.,0.,1.);
- gl_PointSize=max(1.,uSize*uDpr*(.6+seed*.8)*clamp(perspective,.7,1.5)*(band?1.:(gap?.55:.62)));
+ gl_PointSize=max(1.,uSize*uDpr*(.6+seed*.8)*clamp(perspective,.7,1.5)*(band?1.:(gap?.38:.48)));
+ // Keep subpixel dust visible without enlarging the surrounding halo.
+ vCoreScale=band?12.96:min(12.96,pow(gl_PointSize/max(1.,1.7*uDpr),2.));
  vec2 tube=bandTube(id);
  float density=exp(-dot(tube,tube)*2.2),edge=1.-smoothstep(.65,1.15,length(tube));
- vEnergy=band?(.40+density*1.2)*edge*tipOpacity(id,uTime):(gap?uGapOpacity*tipOpacity(id,uTime):(.45+1.8*exp(-length(vortexLocal(id,uTime))/max(.02,uVortexRadius)*2.)));
+ float dust=dustPhase(id,uTime),dustFade=smoothstep(0.,.045,dust)*(1.-smoothstep(.955,1.,dust));
+ vEnergy=band?(.40+density*1.2)*edge*tipOpacity(id,uTime):(gap?uGapOpacity*tipOpacity(id,uTime):uDustOpacity*(.45+.55*abs(dust*2.-1.))*dustFade);
  vRing=secondRing(id)?1.:0.;
  vTint=band||gap?clamp(.45+p.z*.7,0.,1.):1.8;vActivity=clamp(length(nucleusPointer(p))*.5,0.,1.);
 }`;
 const pointFragment=`#version 300 es
 precision highp float;
-in float vEnergy,vTint,vActivity,vRing;
+in float vEnergy,vTint,vActivity,vRing,vCoreScale;
 uniform vec3 uColorA,uColorB,uActiveColor,uRingColorA,uRingColorB;uniform float uGain;
 out vec4 color;
 void main(){
  vec2 uv=gl_PointCoord*2.-1.;float r=dot(uv,uv);if(r>1.)discard;
  // Combine the soft halo and sharp center in one point pass.
  float halo=exp(-r*3.5)*(1.-smoothstep(.65,1.,r));
- float coreRadius=r*12.96,core=exp(-coreRadius*2.7)*(1.-smoothstep(.65,1.,coreRadius));
+ float coreRadius=r*vCoreScale,core=exp(-coreRadius*2.7)*(1.-smoothstep(.65,1.,coreRadius));
  float soft=core+halo*.055;
- vec3 tint=mix(mix(uRingColorA,uRingColorB,vRing),mix(uColorA,uColorB,vTint),.35);tint=mix(tint,uActiveColor,max(vActivity*.86,step(1.,vTint)*.65));
+ vec3 tint=mix(mix(uRingColorA,uRingColorB,vRing),mix(uColorA,uColorB,clamp(vTint,0.,1.)),.35);tint=mix(tint,uActiveColor,max(vActivity*.86,step(1.,vTint)*.65));
  color=vec4(tint,soft*vEnergy*(1.+vActivity*.65)*uGain);
 }`;
 const beamFragment=`#version 300 es
@@ -123,15 +136,17 @@ export function createCinemaRenderer(canvas){
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'high-performance'});if(!gl)return null;
  const resources=createGpuResources(gl);let state=null,disposed=false,width=0,height=0,dpr=1,count=0,reset=true,gui=null;
  let startTime=null,lastTime=null,accumulator=0,fpsStart=null,fpsFrames=0;
- let placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),groups={ring:0,gap:0,vortex:0};const emptyTrail=new Float32Array(32);
+ let placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),groups={ring:0,gap:0,dust:0};const emptyTrail=new Float32Array(32);
  const development=IS_DEVELOPMENT&&['localhost','127.0.0.1','[::1]'].includes(location.hostname);
- const names=['uResolution','uPlacement','uCenter','uRingBasisA','uRingBasisB','uRingRadii','uGap','uFlowSpeed','uTipFade','uBandRadius','uBandThickness','uBandHeight','uVortexBasis','uRingCount','uGapCount','uGapOpacity','uTipScale','uTipTaper','uVortexRadius','uVortexSpeed','uVortexTurbulence','uBandShear','uBeamEnds','uPulseSpeed','uTurbulenceSpeed','uTurbulence','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTrail[0]','uRadius','uRepulsion','uSize','uDpr','uColorA','uColorB','uActiveColor','uGain','uRingColorA','uRingColorB','uBeamStrength','uBeamGrowth','uBeamColor'];
+ const names=['uResolution','uPlacement','uCenter','uRingBasisA','uRingBasisB','uRingRadii','uGap','uFlowSpeed','uTipFade','uBandRadius','uBandThickness','uBandHeight','uBeamBasis','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uBandShear','uBeamEnds','uPulseSpeed','uTurbulenceSpeed','uTurbulence','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTrail[0]','uRadius','uRepulsion','uSize','uDpr','uColorA','uColorB','uActiveColor','uGain','uRingColorA','uRingColorB','uBeamStrength','uBeamGrowth','uBeamColor'];
  function dispose(){if(disposed)return;disposed=true;gui?.destroy();state?.dispose();resources.dispose();}
  try{
   const simulation=resources.program(simulationVertex,emptyFragment,names,true),points=resources.program(pointVertex,pointFragment,names),beam=resources.program(fullscreenVertex,beamFragment,names);
   function uniforms(target,age,trail){
    gl.useProgram(target.program);const u=target.u;
-   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform4fv(u.uPlacement,placement);gl.uniform3fv(u.uCenter,center);gl.uniformMatrix3fv(u.uRingBasisA,false,rings.frames[0].basis);gl.uniformMatrix3fv(u.uRingBasisB,false,rings.frames[1].basis);gl.uniform2f(u.uRingRadii,rings.frames[0].radius,rings.frames[1].radius);gl.uniform1f(u.uGap,rings.geometry.gap);gl.uniform1f(u.uFlowSpeed,config.ringFlowSpeed);gl.uniform1f(u.uTipFade,Math.max(.025,Math.min(.2,config.ringTipFade)));gl.uniformMatrix3fv(u.uVortexBasis,false,bandBasis(rings.pose.direction));gl.uniform1f(u.uRingCount,groups.ring);gl.uniform1f(u.uGapCount,groups.gap);gl.uniform1f(u.uGapOpacity,config.gapOpacity);gl.uniform1f(u.uTipScale,rings.geometry.tipScale);gl.uniform1f(u.uTipTaper,rings.geometry.tipTaper);gl.uniform1f(u.uVortexRadius,Math.min(config.vortexRadius,rings.geometry.radius*.38));gl.uniform1f(u.uVortexSpeed,config.vortexSpeed);gl.uniform1f(u.uVortexTurbulence,Math.min(.02,config.vortexTurbulence));gl.uniform1f(u.uBandRadius,rings.geometry.radius);gl.uniform1f(u.uBandThickness,rings.geometry.thickness);gl.uniform1f(u.uBandShear,config.bandShear);gl.uniform1f(u.uTime,age);gl.uniform1f(u.uDpr,dpr);
+   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform4fv(u.uPlacement,placement);gl.uniform3fv(u.uCenter,center);gl.uniformMatrix3fv(u.uRingBasisA,false,rings.frames[0].basis);gl.uniformMatrix3fv(u.uRingBasisB,false,rings.frames[1].basis);gl.uniform2f(u.uRingRadii,rings.frames[0].radius,rings.frames[1].radius);gl.uniform1f(u.uGap,rings.geometry.gap);gl.uniform1f(u.uFlowSpeed,config.ringFlowSpeed);gl.uniform1f(u.uTipFade,Math.max(.002,Math.min(.08,config.ringTipFade)));gl.uniformMatrix3fv(u.uBeamBasis,false,bandBasis(rings.pose.direction));gl.uniform1f(u.uRingCount,groups.ring);gl.uniform1f(u.uGapCount,groups.gap);gl.uniform1f(u.uGapOpacity,config.gapOpacity);gl.uniform1f(u.uNeckClearance,rings.geometry.clearanceFraction);gl.uniform1f(u.uTubeBound,rings.geometry.tube);
+   const endRadius=Math.min(Math.max(.012,config.beamDustEndRadius),rings.geometry.radius*.24);
+   gl.uniform1f(u.uDustLength,Math.min(.90,Math.max(.3,config.beamDustLength)));gl.uniform1f(u.uDustWaist,Math.min(Math.max(.001,config.beamDustWaist),endRadius*.5));gl.uniform1f(u.uDustEndRadius,endRadius);gl.uniform1f(u.uDustSpin,config.beamDustSpin);gl.uniform1f(u.uDustFlow,config.beamDustFlow);gl.uniform1f(u.uDustOpacity,Math.min(.35,config.beamDustOpacity));gl.uniform1f(u.uBandRadius,rings.geometry.radius);gl.uniform1f(u.uBandThickness,rings.geometry.thickness);gl.uniform1f(u.uBandShear,config.bandShear);gl.uniform1f(u.uTime,age);gl.uniform1f(u.uDpr,dpr);
    gl.uniform4fv(u['uTrail[0]'],trail);gl.uniform1f(u.uRadius,config.repulsionRadius/height);gl.uniform1f(u.uRepulsion,config.repulsionForce);
   }
   const api={
@@ -145,7 +160,7 @@ export function createCinemaRenderer(canvas){
     state?.dispose();state=createGpuState(gl,count);reset=true;accumulator=0;lastTime=null;
     const mobile=w<=700,aspect=w/h;
     placement=new Float32Array([mobile?aspect*.02:aspect*.235,mobile?.18:.055,mobile?aspect*1.04:Math.min(1.06,aspect*.75),0]);
-    Object.assign(canvas.dataset,{particleEngine:'gpu-orbital-nucleus',particleCount:String(count),beamMaterial:'continuous-light',ringCount:String(groups.ring),gapCount:String(groups.gap),vortexCount:String(groups.vortex),pixelRatio:dpr.toFixed(2)});
+    Object.assign(canvas.dataset,{particleEngine:'gpu-orbital-nucleus',particleCount:String(count),beamMaterial:'continuous-light',ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),pixelRatio:dpr.toFixed(2)});
    },
    restart(){startTime=null;lastTime=null;reset=true;},
    draw(time,progress=0,trail=emptyTrail,tilt=[0,0]){
@@ -182,9 +197,10 @@ export function createCinemaRenderer(canvas){
     gui=new GUI({title:'Núcleo y galaxia · desarrollo',width:275});Object.assign(gui.domElement.style,{top:'auto',bottom:'12px',right:'12px',zIndex:'10000',maxHeight:'80vh',overflowY:'auto'});
     const refresh=()=>window.dispatchEvent(new Event('particle-config-change'));
     const core=gui.addFolder('Núcleo');core.add(config,'count',20000,60000,1000).name('Cantidad escritorio').onFinishChange(refresh);core.add(config,'mobileCount',6000,20000,1000).name('Cantidad móvil').onFinishChange(refresh);
-    for(const [key,min,max,step,label]of[['bandRadius',.18,.4,.005,'Radio de banda'],['bandThickness',.025,.14,.005,'Grosor radial'],['bandHeight',.025,.14,.005,'Grosor vertical'],['bandShear',.5,2,.05,'Diferencia de velocidad'],['ringFlowSpeed',.03,.5,.01,'Velocidad de flujo'],['ringGapDegrees',25,100,1,'Apertura de los huecos'],['ringLagA',0,2,.05,'Retraso C azul'],['ringLagB',0,2,.05,'Retraso C violeta'],['ringWobble',0,3,.1,'Bamboleo propio'],['ringBreath',0,.008,.001,'Respiración'],['ringOrientation',20,60,1,'Ángulo del conjunto'],['ringTipFade',.015,.08,.005,'Desvanecer puntas'],['turbulence',0,.08,.001,'Turbulencia'],['turbulenceSpeed',.02,.3,.005,'Ritmo de turbulencia'],['brightness',.2,1.5,.01,'Brillo'],['size',.7,3,.05,'Tamaño'],['beamStrength',.5,3,.05,'Luz central']]){const control=core.add(config,key,min,max,step).name(label);if(key==='ringGapDegrees')control.onFinishChange(refresh);}core.close();
-    const gap=gui.addFolder('Flujo del hueco');gap.add(config,'gapDensity',0,.12,.005).name('Densidad relativa').onFinishChange(refresh);gap.add(config,'gapOpacity',.04,.35,.01).name('Opacidad');gap.close();
-    const vortex=gui.addFolder('Vórtice junto al rayo');vortex.add(config,'vortexCount',0,6000,100).name('Cantidad escritorio').onFinishChange(refresh);vortex.add(config,'mobileVortexCount',0,2000,100).name('Cantidad móvil').onFinishChange(refresh);vortex.add(config,'vortexRadius',.035,.11,.005).name('Radio');vortex.add(config,'vortexSpeed',.5,2,.05).name('Giro');vortex.add(config,'vortexTurbulence',0,.02,.001).name('Turbulencia');vortex.close();
+    for(const [key,min,max,step,label]of[['bandRadius',.18,.4,.005,'Radio de banda'],['bandThickness',.025,.14,.005,'Grosor radial'],['bandHeight',.025,.14,.005,'Grosor vertical'],['bandShear',.5,2,.05,'Diferencia de velocidad'],['ringFlowSpeed',.03,.5,.01,'Velocidad de flujo'],['ringGapDegrees',15,60,1,'Apertura de los huecos'],['ringLagA',0,2,.05,'Retraso C azul'],['ringLagB',0,2,.05,'Retraso C violeta'],['ringWobble',0,3,.1,'Bamboleo propio'],['ringBreath',0,.008,.001,'Respiración'],['ringOrientation',20,60,1,'Ángulo del conjunto'],['ringTipFade',.003,.04,.001,'Desvanecer puntas'],['turbulence',0,.08,.001,'Turbulencia'],['turbulenceSpeed',.02,.3,.005,'Ritmo de turbulencia'],['brightness',.2,1.5,.01,'Brillo'],['size',.7,3,.05,'Tamaño'],['beamStrength',.5,3,.05,'Luz central']]){const control=core.add(config,key,min,max,step).name(label);if(key==='ringGapDegrees')control.onFinishChange(refresh);}core.close();
+    const gap=gui.addFolder('Flujo del hueco');gap.add(config,'gapDensity',0,.12,.005).name('Densidad relativa').onFinishChange(refresh);gap.add(config,'gapOpacity',.02,.25,.01).name('Opacidad');gap.close();
+    const dust=gui.addFolder('Reloj de partículas del rayo');dust.add(config,'beamDustCount',0,5000,100).name('Cantidad escritorio').onFinishChange(refresh);dust.add(config,'mobileBeamDustCount',0,1500,50).name('Cantidad móvil').onFinishChange(refresh);
+    for(const [key,min,max,step,label]of[['beamDustLength',.3,.9,.02,'Largo'],['beamDustWaist',.001,.012,.001,'Radio del centro'],['beamDustEndRadius',.015,.07,.005,'Radio de extremos'],['beamDustSpin',.2,1.5,.05,'Giro'],['beamDustFlow',.015,.09,.005,'Flujo axial'],['beamDustOpacity',.05,.35,.01,'Opacidad']])dust.add(config,key,min,max,step).name(label);dust.close();
     const movement=gui.addFolder('Reloj de arena');for(const [key,min,max,step]of[['beamCycleSeconds',25,100,1],['beamMaxAngle',5,40,1],['beamDepthAmplitude',.05,.5,.01],['beamPulseSpeed',.05,.4,.005]])movement.add(config,key,min,max,step);movement.close();
     const sensor=gui.addFolder('Inclinación móvil');for(const [key,min,max,step]of[['gyroRange',10,40,1],['gyroMaxDisplacement',5,30,1],['gyroSmoothing',.1,.8,.01],['gyroMaxTilt',0,5,.25],['gyroBackPixels',0,12,1],['gyroCorePixels',0,20,1],['gyroFrontPixels',0,25,1],['gyroAuroraPixels',0,8,1]])sensor.add(config,key,min,max,step);sensor.close();
     const aurora=gui.addFolder('Aurora');for(const [key,min,max,step]of[['auroraIntensity',0,.3,.01],['auroraSpeed',.005,.08,.005],['auroraNoiseScale',.8,4,.1],['auroraCurtains',1,4,1],['auroraScroll',0,1,.05],['auroraPointer',0,1.5,.05]])aurora.add(config,key,min,max,step);for(const key of ['auroraColorA','auroraColorB','auroraColorC','auroraColorD'])aurora.addColor(config,key);aurora.add(config,'auroraResolution',.2,.5,.05).onFinishChange(refresh);aurora.add(config,'auroraMobileResolution',.2,.4,.02).onFinishChange(refresh);aurora.close();

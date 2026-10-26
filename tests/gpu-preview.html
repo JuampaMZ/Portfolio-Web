@@ -41,12 +41,18 @@ document.querySelector('button').addEventListener('click',async()=>{
   }
   assert(samples.every(values=>values.length>70&&Math.max(...values.map(v=>v.r))-Math.min(...values.map(v=>v.r))>.03&&Math.max(...values.map(v=>v.y))-Math.min(...values.map(v=>v.y))>.025),'Dos bandas volumétricas presentes en planos distintos');
   assert(samples.every((values,index)=>values.filter(v=>Math.abs(Math.atan2(Math.sin(v.angle-index*Math.PI),Math.cos(v.angle-index*Math.PI)))>scene.geometry.gap/2-.15).length>values.length*.94),'Los huecos opuestos quedan abiertos en la simulación GPU');assert(dist(start,assembled)>.1,'Ensamblado gradual desde posiciones dispersas');
-  const ringCount=Number(a.canvas.dataset.ringCount),gapCount=Number(a.canvas.dataset.gapCount),vortexOffset=ringCount+gapCount,vortex=a.sample(vortexOffset,128),gapFlow=a.sample(ringCount,Math.min(96,gapCount));
-  let closeVortex=0,flatVortex=0,flowInGap=0;
-  for(let i=0;i<vortex.length;i+=6){const p=[0,1,2].map(j=>(vortex[i+j]-center[j])/1.06);if(Math.hypot(...p)<.14)closeVortex++;if(Math.abs(p.reduce((sum,v,j)=>sum+v*pose.direction[j],0))<.03)flatVortex++;}
-  assert(closeVortex>120&&flatVortex>120,'Vórtice separado, pequeño y perpendicular al rayo en GPU');
+  const ringCount=Number(a.canvas.dataset.ringCount),gapCount=Number(a.canvas.dataset.gapCount),dustOffset=ringCount+gapCount,dust=a.sample(dustOffset,256),gapFlow=a.sample(ringCount,Math.min(96,gapCount));
+  let narrowCenter=0,wideEnds=0,aligned=0,positive=0,negative=0,flowInGap=0;const radii=[],axial=[];
+  for(let i=0;i<dust.length;i+=6){
+   const p=[0,1,2].map(j=>(dust[i+j]-center[j])/1.06),along=p.reduce((sum,v,j)=>sum+v*pose.direction[j],0),radius=Math.sqrt(Math.max(0,p.reduce((sum,v)=>sum+v*v,0)-along*along));
+   axial.push(along);radii.push(radius);if(Math.abs(along)<config.beamDustLength*.08&&radius<config.beamDustWaist+.01)narrowCenter++;
+   if(Math.abs(along)>config.beamDustLength*.32&&radius>config.beamDustWaist*2)wideEnds++;
+   if(radius<config.beamDustEndRadius+.015&&Math.abs(along)<config.beamDustLength*.55)aligned++;
+  }
+  assert(aligned>245&&Math.max(...axial)-Math.min(...axial)>config.beamDustLength*.8,'Partículas distribuidas a lo largo del eje del rayo');
+  assert(narrowCenter>15&&wideEnds>50,'Reloj angosto en el centro y más ancho en ambos extremos');
   for(let i=0;i<gapFlow.length;i+=6){const id=ringCount+i/6,m=scene.frames[id%2].basis,p=[0,1,2].map(j=>(gapFlow[i+j]-center[j])/1.06),x=m[0]*p[0]+m[1]*p[1]+m[2]*p[2],z=m[6]*p[0]+m[7]*p[1]+m[8]*p[2],angle=Math.atan2(z,x)-id%2*Math.PI;if(Math.abs(Math.atan2(Math.sin(angle),Math.cos(angle)))<scene.geometry.gap/2+.15)flowInGap++;}
-  assert(flowInGap>gapFlow.length/6*.94&&gapCount<ringCount*.02,'Flujo escaso cruza únicamente la abertura de cada C');
+  assert(flowInGap>gapFlow.length/6*.94&&gapCount<ringCount*.02,'Hilo fino de pocas partículas recorre la curva de cada abertura');
   assert(a.beam()>startBeam+200&&introState(3.45).text===0,'El rayo crece antes de la entrada de textos');
   assert(dist(a.sample(),b.sample())<.00001,'Simulaciones independientes reproducibles');
   const trail=new Float32Array(32);trail.set([assembled[0]/(1-assembled[2]*.38),assembled[1]/(1-assembled[2]*.38),1,1]);
@@ -59,6 +65,12 @@ document.querySelector('button').addEventListener('click',async()=>{
   for(let i=2;i<=180;i++){control.draw(5.5+i/60,0,empty);perturbed.draw(5.5+i/60,0,empty);if(i%60===0)await new Promise(requestAnimationFrame);}
   assert(dist(a.sample(),b.sample())<.002,'Las partículas recuperan sus órbitas móviles');
   assert([...a.sample(),...b.sample()].every(Number.isFinite),'Órbitas, espirales y expulsiones mantienen valores finitos');
+  const flowScene=interlockedRings(8.5),flowPose=flowScene.pose,flowCenter=[.376*(1-flowPose.depth*.38),.055*(1-flowPose.depth*.38),flowPose.depth],flowStart=a.sample(dustOffset,256);
+  const flowAxial=[];for(let i=0;i<flowStart.length;i+=6)flowAxial.push([0,1,2].reduce((sum,j)=>sum+(flowStart[i+j]-flowCenter[j])/1.06*flowPose.direction[j],0));
+  const laterScene=interlockedRings(8.7),laterPose=laterScene.pose,laterCenter=[.376*(1-laterPose.depth*.38),.055*(1-laterPose.depth*.38),laterPose.depth];
+  for(let i=1;i<=12;i++)control.draw(8.5+i/60,0,empty);const dustLater=a.sample(dustOffset,256);
+  for(let i=0;i<dustLater.length;i+=6){const along=[0,1,2].reduce((sum,j)=>sum+(dustLater[i+j]-laterCenter[j])/1.06*laterPose.direction[j],0),delta=along-flowAxial[i/6];if(Math.abs(delta)<.04){if(delta>.001)positive++;if(delta<-.001)negative++;}}
+  assert(positive>70&&negative>70,'Flujo axial suave en ambos sentidos sin formar un disco');
   control.resize(390,844);control.draw(9,0,empty);
   assert(Number(a.canvas.dataset.particleCount)<=10000&&Number(a.canvas.dataset.pixelRatio)<=2,'Resize reduce partículas y DPR en móvil');
   assert(a.canvas.dataset.particlePhase==='orbiting','El resize no reinicia la entrada ni detiene la animación');

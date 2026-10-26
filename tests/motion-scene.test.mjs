@@ -45,11 +45,11 @@ test('both thick C tubes retain clearance across hourglass motion, independent l
  }
  assert.ok(independent,'Each ring has its own bounded motion');
 });
-test('the safety envelope widens undersized gaps and limits excessive tube and wobble settings',()=>{
+test('local necks retain clearance at narrow openings and limit excessive tube and wobble settings',()=>{
  for(const radius of [.18,.3,.4]){
   const g=interlockGeometry({...config,bandRadius:radius,bandThickness:.14,bandHeight:.14,ringGapDegrees:15,ringBreath:.1});
   assert.ok(g.thickness<=radius*.22);assert.ok(g.height<=radius*.22);
-  assert.ok(Math.min(2*radius*Math.sin(g.gap/4)-(1+g.tipScale)*g.tube,2*radius*Math.sin(g.gap/4+g.tipTaper/2)-2*g.tube)-2*g.breath-2*(radius+g.tube+g.breath)*Math.sin(g.maxRotation)>=g.margin-1e-8);
+  assert.ok((1-2*g.clearanceFraction)*g.nearest-2*g.breath-2*(radius+g.tube+g.breath)*Math.sin(g.maxRotation)>=g.margin-1e-8);
  }
 });
 
@@ -85,7 +85,8 @@ test('denial, unavailable sensors, Android and desktop retain a safe non-sensor 
  const absent=new EventTarget(),fallback=createDeviceTilt({win:absent,nav:{userAgent:'iPhone'},now:()=>0});assert.equal(fallback.status,'unsupported');fallback.dispose();
 });
 
-test('the opening is substantially smaller while retaining a full thick band away from its tips',()=>{
- const g=interlockGeometry();assert.ok(g.gap*180/Math.PI<55);assert.ok(Math.abs(ringTubeScale(g.gap/2,0,g)-g.tipScale)<1e-8);
- assert.equal(ringTubeScale(g.gap/2+g.tipTaper,0,g),1);assert.equal(ringTubeScale(Math.PI+g.gap/2+g.tipTaper,1,g),1);
+test('the C opening is 15–20 degrees and the necks preserve the volume away from both crossings',()=>{
+ const g=interlockGeometry();assert.ok(g.gap*180/Math.PI>=15&&g.gap*180/Math.PI<=20);
+ assert.ok(ringTubeScale(g.gap/2,0,g)<.35);assert.ok(ringTubeScale(Math.PI,0,g)<.35);
+ assert.equal(ringTubeScale(Math.PI/2,0,g),1);assert.equal(ringTubeScale(Math.PI*1.5,1,g),1);
 });
