@@ -5,14 +5,14 @@
 import {createCinemaRenderer} from '../js/cinema-renderer.js';
 import {initAtmosphere,createGalaxyRenderer,galaxySource} from '../js/atmosphere.js';
 import {createAuroraRenderer} from '../js/aurora-renderer.js';
-import {interlockedRings,bandBasis} from '../js/particle-motion.js';
+import {interlockedRings,bandBasis,beamEndpoints,beamWorldEndpoints,projectPoint} from '../js/particle-motion.js';
 import {PARTICLE_CONFIG as config,introState} from '../js/particle-config.js';
 import {gpuMath,emptyFragment,createGpuResources,createGpuState} from '../js/particle-gpu.js';
 const output=document.querySelector('pre'),host=document.querySelector('#canvases');
 function tracked(){
  const canvas=document.createElement('canvas');host.append(canvas);
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:true});
- const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
+ const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback','Texture','Framebuffer'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
  for(const kind of kinds){
   const create=gl['create'+kind].bind(gl),destroy=gl['delete'+kind].bind(gl);
   gl['create'+kind]=(...args)=>{const value=create(...args);resources.get(kind).add(value);return value;};
@@ -26,7 +26,7 @@ const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
 document.querySelector('button').addEventListener('click',async()=>{
  output.textContent='Ejecutando comprobaciones GPU…';await new Promise(requestAnimationFrame);
  const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
- const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null,foreground=null,travelState=null,travelResources=null;const oldRadius=config.repulsionRadius,oldHalo=config.planetHalo,oldTrail=config.planetTrail,oldFlow=config.beamDustFlow,oldNoise=config.beamHelixTurbulence;
+ const a=tracked(),b=tracked();let control=null,perturbed=null,field=null,atmosphere=null,aurora=null,foreground=null,travelState=null,travelResources=null;const oldColors=Object.fromEntries(['colorA','colorB','ringColorA','ringColorB','activeColor'].map(key=>[key,config[key]]));const oldRadius=config.repulsionRadius,oldHalo=config.planetHalo,oldTrail=config.planetTrail,oldFlow=config.beamDustFlow,oldNoise=config.beamHelixTurbulence;
  try{
   control=createCinemaRenderer(a.canvas);perturbed=createCinemaRenderer(b.canvas);assert(Boolean(control&&perturbed),'Shaders de órbitas y nube compilados');
   control.resize(800,500);perturbed.resize(800,500);const empty=new Float32Array(32);
@@ -81,18 +81,36 @@ document.querySelector('button').addEventListener('click',async()=>{
   assert(distorted>180,'Curl noise deforma las hélices sin cambiar el eje del reloj');
   const originalCount=Number(a.canvas.dataset.particleCount),bandIds=Array.from({length:256},(_,i)=>i),dustIds=Array.from({length:128},(_,i)=>dustOffset+i);
   const rgbDistance=(x,y)=>Math.abs(x[0]-y[0])+Math.abs(x[1]-y[1])+Math.abs(x[2]-y[2]);
-  for(const time of [10,17.5,30,42.5]){
-   control.draw(time,0,empty);const ray=interlockedRings(time).pose;
+  const maskPixel=(x,y)=>{const gl=a.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,[...a.resources.get('Framebuffer')][0]);const p=a.pixel(x,y);gl.bindFramebuffer(gl.FRAMEBUFFER,null);return p;};
+  const placement=[.376,.055,1.06,1.6];
+  for(const time of [50,66.67,83.33]){
+   control.resize(800,500,true);control.draw(time,0,empty);
+   const ray=interlockedRings(time).pose;
+   assert(Number(a.canvas.dataset.beamNearRadius)>Number(a.canvas.dataset.beamFarRadius)*1.05,'El extremo cercano tiene mayor radio proyectado a t='+time);
+   const frame=new Uint8Array(a.canvas.width*a.canvas.height*4);a.gl.readPixels(0,0,a.canvas.width,a.canvas.height,a.gl.RGBA,a.gl.UNSIGNED_BYTE,frame);let pink=0;
+   for(let i=0;i<frame.length;i+=4)if(frame[i]>35&&frame[i]>frame[i+1]*1.12&&frame[i]>frame[i+2]*1.03)pink++;
+   assert(pink>40,'Hélices contrastantes visibles en el render a t='+time+' ('+pink+' píxeles)');
    const px=Math.floor(a.canvas.width*.735),py=Math.floor(a.canvas.height*.555);
    a.replacePoints(originalCount,[],[50,50,0]);control.draw(time,0,empty);const beamOnly=a.pixel(px,py);
    const position=z=>[.376*(1-z*.38),.055*(1-z*.38),z];
+   // Black test occluders isolate mask attenuation from the light emitted by the band itself.
+   for(const key of Object.keys(oldColors))config[key]='#000000';
    a.replacePoints(originalCount,bandIds,position(ray.depth-.18));control.draw(time,0,empty);const behind=a.pixel(px,py);
+   assert(rgbDistance(beamOnly,behind)<5&&maskPixel(px,py)[0]===0,'Banda trasera detrás del núcleo y excluida de la máscara a t='+time);
    a.replacePoints(originalCount,bandIds,position(ray.depth+.18));control.draw(time,0,empty);const front=a.pixel(px,py);
-   assert(rgbDistance(beamOnly,behind)<5,'La banda trasera queda oculta por el núcleo a t='+time);
-   assert(beamOnly[0]+beamOnly[1]+beamOnly[2]-front[0]-front[1]-front[2]>90,'La banda delantera tapa la luz con cobertura a t='+time);
-   a.replacePoints(originalCount,dustIds,position(ray.depth-.18));control.draw(time,0,empty);assert(rgbDistance(beamOnly,a.pixel(px,py))<5,'Las hélices traseras respetan la profundidad a t='+time);
+   assert(maskPixel(px,py)[0]>240&&front.slice(0,3).reduce((s,v)=>s+v,0)<beamOnly.slice(0,3).reduce((s,v)=>s+v,0)*.15,'Máscara de banda delantera atenúa el núcleo más del 85% a t='+time);
+   const ends=beamEndpoints(ray,placement),dx=ends[2]-ends[0],dy=ends[3]-ends[1],len=Math.hypot(dx,dy),gx=px+Math.round(-dy/len*8),gy=py+Math.round(dx/len*8),screen=[(gx+.5-a.canvas.width/2)/a.canvas.height,(gy+.5-a.canvas.height/2)/a.canvas.height];
+   a.replacePoints(originalCount,[],[50,50,0]);control.draw(time,0,empty);const glowOnly=a.pixel(gx,gy);
+   const frontZ=ray.depth+.18;a.replacePoints(originalCount,bandIds,[screen[0]*(1-frontZ*.38),screen[1]*(1-frontZ*.38),frontZ]);control.draw(time,0,empty);const glowCovered=a.pixel(gx,gy);
+   assert(maskPixel(gx,gy)[0]>240&&glowOnly.slice(0,3).reduce((s,v)=>s+v,0)>15&&glowCovered.slice(0,3).reduce((s,v)=>s+v,0)<glowOnly.slice(0,3).reduce((s,v)=>s+v,0)*.25,'La máscara atenúa también el glow a t='+time);
+   Object.assign(config,oldColors);
+   a.replacePoints(originalCount,dustIds,position(ray.depth-.18));control.draw(time,0,empty);
+   assert(rgbDistance(beamOnly,a.pixel(px,py))<5&&maskPixel(px,py)[1]===0,'Hélices traseras ocultas y fuera de máscara a t='+time);
+   a.replacePoints(originalCount,dustIds,position(ray.depth+.18));control.draw(time,0,empty);
+   assert(maskPixel(px,py)[1]>240,'Hélices delanteras contribuyen al canal propio de máscara a t='+time);
    await new Promise(requestAnimationFrame);
   }
+  Object.assign(config,oldColors);
   assert(a.gl.getContextAttributes().depth,'El canvas del núcleo tiene buffer de profundidad real');
   control.resize(390,844);control.draw(9,0,empty);
   assert(Number(a.canvas.dataset.particleCount)<=19000&&Number(a.canvas.dataset.pixelRatio)<=2,'Resize reduce partículas y DPR en móvil');
@@ -150,6 +168,6 @@ void main(){Journey trip=journey(float(gl_VertexID),uTime);nextPosition=trip.pos
   atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.aurora-layer').length===0,'Desmontaje retira canvas, nebulosa y listeners');
   output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
  }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);}
- finally{config.beamDustFlow=oldFlow;config.beamHelixTurbulence=oldNoise;config.repulsionRadius=oldRadius;config.planetHalo=oldHalo;config.planetTrail=oldTrail;travelState?.dispose();travelResources?.dispose();control?.dispose();perturbed?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
+ finally{Object.assign(config,oldColors);config.beamDustFlow=oldFlow;config.beamHelixTurbulence=oldNoise;config.repulsionRadius=oldRadius;config.planetHalo=oldHalo;config.planetTrail=oldTrail;travelState?.dispose();travelResources?.dispose();control?.dispose();perturbed?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
 });
 </script></html>

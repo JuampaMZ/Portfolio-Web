@@ -2,13 +2,13 @@ import {interlockedRings,bandBasis,beamEndpoints,beamWorldEndpoints} from './par
 import {tiltOffset} from './particle-orientation.js';
 import {IS_DEVELOPMENT} from './environment.js';
 import {PARTICLE_CONFIG as config,particleBudget,nucleusGroups,introState} from './particle-config.js';
-import {gpuMath,nucleusProjection,fullscreenVertex,emptyFragment,rgb,createGpuResources,createGpuState} from './particle-gpu.js';
+import {gpuMath,nucleusProjection,beamVolume,createParticleMask,fullscreenVertex,emptyFragment,rgb,createGpuResources,createGpuState} from './particle-gpu.js';
 export {PARTICLE_CONFIG,particleBudget} from './particle-config.js';
 
 const orbitalSource=`
 uniform vec4 uPlacement;uniform vec3 uCenter;uniform mat3 uRingBasisA,uRingBasisB,uBeamBasis;uniform vec2 uRingRadii;
 uniform float uRingCount,uGapCount,uGapOpacity,uNeckClearance,uTubeBound;
-uniform float uDustLength,uDustWaist,uDustEndRadius,uDustSpin,uDustFlow,uDustOpacity;
+uniform float uDustLength,uDustWaist,uDustEndRadius,uDustSpin,uDustFlow,uDustOpacity;uniform vec2 uDustExtents;
 uniform float uHelixCount,uHelixReverse,uHelixTurbulence,uHelixNoiseSpeed;uniform vec2 uHelixRadii,uHelixSpeeds;
 uniform float uFlowSpeed,uGap,uTipFade,uBandRadius,uBandThickness,uBandHeight,uBandShear,uTurbulence,uTurbulenceSpeed;
 vec2 bandTube(float id){
@@ -34,7 +34,7 @@ float dustPhase(float id,float time){
  return fract(random(id+23.)+time*uDustFlow/max(.2,uDustLength)*direction);
 }
 vec3 beamDustLocal(float id,float time){
- float phase=dustPhase(id,time),axial=phase*2.-1.;
+ float phase=dustPhase(id,time),along=mix(-uDustExtents.y,uDustExtents.x,phase),axial=along/(along>=0.?uDustExtents.x:uDustExtents.y);
  float cone=(sqrt(axial*axial+.0025)-.05)/.95124922,envelope=mix(uDustWaist,uDustEndRadius,cone);
  float strand=mod(id-uRingCount-uGapCount,uHelixCount),seed=random(strand+901.);
  float direction=strand<floor(uHelixCount*uHelixReverse+.5)?-1.:1.;
@@ -42,10 +42,10 @@ vec3 beamDustLocal(float id,float time){
  float radius=envelope*mix(uHelixRadii.x,uHelixRadii.y,seed)*(.86+random(id+31.)*.14);
  radius*=.92+.08*sin(axial*3.+time*.23+strand);
  float angle=strand/uHelixCount*6.2831853+time*uDustSpin*speed*direction+axial*(4.+random(strand+937.)*3.)+(random(id+4.)-.5)*.10;
- vec3 p=vec3(cos(angle)*radius,axial*uDustLength*.5,sin(angle)*radius);
+ vec3 p=vec3(cos(angle)*radius,along,sin(angle)*radius);
  vec3 noise=curlNoise(vec3(p.x*24.,axial*3.,p.z*24.)+strand*1.73,time*uHelixNoiseSpeed);
  p+=noise*uHelixTurbulence*(.3+cone*.7);
- p.xz*=min(1.,envelope/max(length(p.xz),.00001));p.y=clamp(p.y,-uDustLength*.5,uDustLength*.5);
+ p.xz*=min(1.,envelope/max(length(p.xz),.00001));p.y=clamp(p.y,-uDustExtents.y,uDustExtents.x);
  return p;
 }
 vec3 orbitalTarget(float id,float time){
@@ -90,16 +90,19 @@ void main(){
 const pointVertex=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
-uniform vec2 uResolution;uniform float uSize,uDpr,uTime,uOcclusion;
+uniform vec2 uResolution;uniform float uSize,uDpr,uTime,uRenderPass,uGlowRadius;
 out float vEnergy,vTint,vActivity,vRing,vCoreScale,vWorldZ;
 `+gpuMath+nucleusProjection+orbitalSource+`
 void main(){
  float id=float(gl_VertexID),seed=random(id+1.);bool band=inBand(id),gap=inGap(id);vec3 p=aPosition;float perspective=1./max(.55,1.-p.z*.38);
  gl_Position=scenePosition(p,uResolution);vWorldZ=p.z;
- if(uOcclusion>.5){vec2 screen=p.xy*perspective;float t=beamFraction(screen);if(!band||beamDistance(screen,t)*uResolution.y/uDpr>10.||p.z<=beamWorldDepth(t)+.00005){gl_Position=vec4(3.,3.,3.,1.);gl_PointSize=1.;vEnergy=0.;return;}}
- gl_PointSize=max(1.,uSize*uDpr*(.6+seed*.8)*clamp(perspective,.7,1.5)*(band?1.:(gap?.38:.48)));
+ vec2 screen=p.xy*perspective;float rayZ=beamWorldDepth(beamFraction(screen));
+ bool maskPass=uRenderPass>.5&&uRenderPass<1.5;
+ bool skip=maskPass?beamDistance(screen,beamFraction(screen))>uGlowRadius/max(.55,1.-rayZ*.38)*6.3:(uRenderPass<.5?p.z>rayZ+.05:p.z<rayZ-.05);
+ if(skip){gl_Position=vec4(3.,3.,3.,1.);gl_PointSize=1.;vEnergy=0.;return;}
+ gl_PointSize=max(1.,uSize*uDpr*(.6+seed*.8)*clamp(perspective,.7,1.5)*(band?1.:(gap?.38:.85)));
  // Keep subpixel dust visible without enlarging the surrounding halo.
- vCoreScale=band?12.96:min(12.96,pow(gl_PointSize/max(1.,1.7*uDpr),2.));
+ vCoreScale=band?12.96:min(12.96,pow(gl_PointSize/max(1.,(gap?1.7:2.5)*uDpr),2.));
  vec2 tube=bandTube(id);
  float density=exp(-dot(tube,tube)*2.2),edge=1.-smoothstep(.65,1.15,length(tube));
  float dust=dustPhase(id,uTime),dustFade=smoothstep(0.,.045,dust)*(1.-smoothstep(.955,1.,dust));
@@ -110,63 +113,74 @@ void main(){
 const pointFragment=`#version 300 es
 precision highp float;
 in float vEnergy,vTint,vActivity,vRing,vCoreScale,vWorldZ;
-uniform vec3 uColorA,uColorB,uActiveColor,uRingColorA,uRingColorB;uniform float uGain,uOcclusion,uFrontCoverage,uDpr,uCoreWidth;uniform vec2 uResolution;
+uniform vec3 uColorA,uColorB,uActiveColor,uRingColorA,uRingColorB,uHelixColor;uniform float uGain,uRenderPass;uniform vec2 uResolution;
 out vec4 color;
-`+nucleusProjection+`
+`+nucleusProjection+beamVolume+`
 void main(){
  vec2 uv=gl_PointCoord*2.-1.;float r=dot(uv,uv);if(r>1.)discard;
- // Combine the soft halo and sharp center in one point pass.
- float halo=exp(-r*3.5)*(1.-smoothstep(.65,1.,r));
- float coreRadius=r*vCoreScale,core=exp(-coreRadius*2.7)*(1.-smoothstep(.65,1.,coreRadius));
- float soft=core+halo*.055;
- vec3 tint=mix(mix(uRingColorA,uRingColorB,vRing),mix(uColorA,uColorB,clamp(vTint,0.,1.)),.35);tint=mix(tint,uActiveColor,max(vActivity*.86,step(1.,vTint)*.65));
- if(uOcclusion>.5){
-  vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;float t=beamFraction(screen),distance=beamDistance(screen,t)*uResolution.y/uDpr;
-  if(vWorldZ<=beamWorldDepth(t)+.00005)discard;
-  float zone=1.-smoothstep(uCoreWidth*.65,uCoreWidth+1.,distance),body=exp(-r*4.)*(1.-smoothstep(.65,1.,r));
-  float coverage=clamp(body*vEnergy*uGain*uFrontCoverage,0.,.94)*zone;if(coverage<.004)discard;
-  color=vec4(tint*(coverage+soft*vEnergy*uGain*zone*.32),coverage);
- }else color=vec4(tint,soft*vEnergy*(1.+vActivity*.65)*uGain);
+ vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;float t=beamFraction(screen),reference=beamWorldDepth(t);
+ bool nearRay=beamDistance(screen,t)<uGlowRadius/max(.55,1.-reference*.38)*6.2;float gate=0.;
+ if(nearRay){BeamSample ray=sampleBeam(screen);reference=ray.surfaceZ;gate=exp(-ray.distance/max(.0001,uGlowRadius));}
+ bool front=vWorldZ>reference+.00005,helix=vTint>1.;
+ if(uRenderPass>.5&&uRenderPass<1.5){
+  if(!front||!nearRay)discard;
+  float body=helix?exp(-r*vCoreScale*.8):exp(-r*3.)*(1.-smoothstep(.65,1.,r));
+  float coverage=clamp(body*vEnergy*uGain*(helix?1.6:1.25),0.,1.);
+  color=helix?vec4(0.,coverage,0.,coverage):vec4(coverage,0.,0.,coverage);return;
+ }
+ if((uRenderPass<.5&&front)||(uRenderPass>1.5&&!front))discard;
+ float halo=exp(-r*3.5)*(1.-smoothstep(.65,1.,r)),coreRadius=r*vCoreScale;
+ float core=exp(-coreRadius*2.7)*(1.-smoothstep(.65,1.,coreRadius)),soft=core+halo*.055;
+ vec3 tint=helix?mix(uHelixColor,vec3(1.),step(.9,vEnergy)*.3):mix(mix(uRingColorA,uRingColorB,vRing),mix(uColorA,uColorB,clamp(vTint,0.,1.)),.35);
+ tint=mix(tint,uActiveColor,vActivity*.55);
+ float opacity=soft*vEnergy*(1.+vActivity*.65)*uGain*(front?1.+gate*.3:1.);
+ color=vec4(tint,opacity);
 }`;
 const beamFragment=`#version 300 es
 precision highp float;
-uniform vec2 uResolution;uniform float uDpr,uTime,uBeamStrength,uBeamGrowth,uPulseSpeed,uBeamPass,uCoreWidth;uniform vec3 uBeamColor;
+uniform vec2 uResolution;uniform float uTime,uBeamStrength,uBeamGrowth,uPulseSpeed,uGlowIntensity,uFarAttenuation,uMaskStrength,uHelixMaskStrength;uniform vec3 uBeamColor;uniform sampler2D uFrontMask;
 out vec4 color;
-`+nucleusProjection+`
+`+nucleusProjection+beamVolume+`
 void main(){
- gl_FragDepth=1.;
- vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
- vec2 segment=uBeamEnds.zw-uBeamEnds.xy;float len=max(.0001,length(segment));
- vec2 direction=segment/len;float t=dot(screen-uBeamEnds.xy,direction);
- float along=(t-len*.5)*uResolution.y/uDpr;
- float distance=length(screen-(uBeamEnds.xy+direction*clamp(t,0.,len)))*uResolution.y/uDpr;
- if(distance>110.)discard;
- if(uBeamPass>.5&&distance>uCoreWidth)discard;
- float extent=len*.5*uResolution.y/uDpr,cap=1.-smoothstep(extent*.84,extent,abs(along));
- float core=exp(-pow(distance/1.35,1.35)),inner=exp(-distance/5.5)*.46,bloom=exp(-distance/28.)*.075;
- float pulse=exp(-pow((along-sin(uTime*uPulseSpeed)*extent*.78)/32.,2.));
- float flare=exp(-distance/66.)*exp(-pow(along/2.4,2.))*.055;
- vec3 energy=uBeamPass>.5?mix(uBeamColor,vec3(1.),.7)*core*(1.4+pulse*.25):uBeamColor*(inner+bloom)*(1.+pulse*.55);
- if(uBeamPass>.5){if(cap*uBeamGrowth<.001)discard;gl_FragDepth=sceneDepth(beamWorldDepth(beamFraction(screen)));}
- vec3 light=vec3(1.)-exp(-(energy*cap+(uBeamPass<.5?uBeamColor*.8*flare:vec3(0.)))*uBeamStrength*uBeamGrowth);
- float alpha=max(light.r,max(light.g,light.b));color=vec4(light/max(alpha,.0001),alpha);
+ if(uBeamGrowth<.001)discard;
+ vec2 screen=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;BeamSample ray=sampleBeam(screen);
+ if(ray.distance>uGlowRadius*6.)discard;
+ float cap=smoothstep(0.,.035,ray.along)*(1.-smoothstep(.965,1.,ray.along));if(cap<.001)discard;
+ float core=exp(-pow(ray.distance/max(.00001,uBeamRadius),1.6));
+ float inner=exp(-ray.distance/(uGlowRadius*.42))*.40,outer=exp(-ray.distance/uGlowRadius)*.10;
+ float span=abs(uBeamWorldA.z-uBeamWorldB.z),nearZ=max(uBeamWorldA.z,uBeamWorldB.z),farZ=min(uBeamWorldA.z,uBeamWorldB.z);
+ float proximity=clamp((ray.axis.z-farZ)/max(.00001,nearZ-farZ),0.,1.);
+ float attenuation=mix(1.,mix(1.-uFarAttenuation,1.,proximity),smoothstep(.015,.20,span));
+ float pulse=exp(-pow((ray.along-(.5+.35*sin(uTime*uPulseSpeed)))/.08,2.));
+ vec2 coverage=texture(uFrontMask,gl_FragCoord.xy/uResolution).rg;
+ float mask=1.-(1.-clamp(coverage.r*uMaskStrength,0.,1.))*(1.-clamp(coverage.g*uHelixMaskStrength,0.,1.));
+ vec3 energy=(mix(uBeamColor,vec3(1.),.72)*core*(1.5+pulse*.2)+uBeamColor*(inner+outer)*uGlowIntensity)*attenuation*cap*uBeamStrength*uBeamGrowth;
+ vec3 light=(vec3(1.)-exp(-energy))*(1.-mask);
+ float solid=(1.-smoothstep(uBeamRadius*.65,uBeamRadius*1.5,ray.distance))*cap*uBeamGrowth;
+ float glowAlpha=clamp((inner+outer)*uGlowIntensity*attenuation*cap*uBeamGrowth,0.,.75);
+ float alpha=solid+(1.-solid)*glowAlpha*(1.-mask);
+ gl_FragDepth=ray.distance<uBeamRadius?sceneDepth(ray.surfaceZ):1.;
+ color=vec4(light,alpha);
 }`;
 
 export function createCinemaRenderer(canvas){
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:true,powerPreference:'high-performance'});if(!gl)return null;
- const resources=createGpuResources(gl);let state=null,disposed=false,width=0,height=0,dpr=1,count=0,reset=true,gui=null;
+ const resources=createGpuResources(gl);let state=null,mask=null,disposed=false,width=0,height=0,dpr=1,count=0,reset=true,gui=null;
  let startTime=null,lastTime=null,accumulator=0,fpsStart=null,fpsFrames=0;
  let placement=new Float32Array(4),center=new Float32Array(3),rings=interlockedRings(0),groups={ring:0,gap:0,dust:0},rayEnds=new Float32Array(4),rayWorld=[[0,0,0],[0,0,0]];const emptyTrail=new Float32Array(32);
  const development=IS_DEVELOPMENT&&['localhost','127.0.0.1','[::1]'].includes(location.hostname);
- const names=['uResolution','uPlacement','uCenter','uRingBasisA','uRingBasisB','uRingRadii','uGap','uFlowSpeed','uTipFade','uBandRadius','uBandThickness','uBandHeight','uBeamBasis','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uHelixCount','uHelixRadii','uHelixSpeeds','uHelixReverse','uHelixTurbulence','uHelixNoiseSpeed','uOcclusion','uFrontCoverage','uBeamWorldA','uBeamWorldB','uBeamPass','uCoreWidth','uBandShear','uBeamEnds','uPulseSpeed','uTurbulenceSpeed','uTurbulence','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTrail[0]','uRadius','uRepulsion','uSize','uDpr','uColorA','uColorB','uActiveColor','uGain','uRingColorA','uRingColorB','uBeamStrength','uBeamGrowth','uBeamColor'];
- function dispose(){if(disposed)return;disposed=true;gui?.destroy();state?.dispose();resources.dispose();}
+ const names=['uResolution','uPlacement','uCenter','uRingBasisA','uRingBasisB','uRingRadii','uGap','uFlowSpeed','uTipFade','uBandRadius','uBandThickness','uBandHeight','uBeamBasis','uRingCount','uGapCount','uGapOpacity','uNeckClearance','uTubeBound','uDustLength','uDustExtents','uDustWaist','uDustEndRadius','uDustSpin','uDustFlow','uDustOpacity','uHelixCount','uHelixRadii','uHelixSpeeds','uHelixReverse','uHelixTurbulence','uHelixNoiseSpeed','uRenderPass','uBeamWorldA','uBeamWorldB','uBeamRadius','uGlowRadius','uGlowIntensity','uFarAttenuation','uFrontMask','uMaskStrength','uHelixMaskStrength','uHelixColor','uBandShear','uBeamEnds','uPulseSpeed','uTurbulenceSpeed','uTurbulence','uTime','uDt','uReset','uSpring','uDamping','uAssemblyDelay','uAssemblySeconds','uAspect','uRecycleWindow','uTrail[0]','uRadius','uRepulsion','uSize','uDpr','uColorA','uColorB','uActiveColor','uGain','uRingColorA','uRingColorB','uBeamStrength','uBeamGrowth','uBeamColor'];
+ function dispose(){if(disposed)return;disposed=true;gui?.destroy();state?.dispose();mask?.dispose();resources.dispose();}
  try{
-  const simulation=resources.program(simulationVertex,emptyFragment,names,true),points=resources.program(pointVertex,pointFragment,names),beam=resources.program(fullscreenVertex,beamFragment,names);
+  const simulation=resources.program(simulationVertex,emptyFragment,names,true),points=resources.program(pointVertex,pointFragment,names),beam=resources.program(fullscreenVertex,beamFragment,names);mask=createParticleMask(gl);
   function uniforms(target,age,trail){
    gl.useProgram(target.program);const u=target.u;
-   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform4fv(u.uPlacement,placement);gl.uniform3fv(u.uCenter,center);gl.uniform4fv(u.uBeamEnds,rayEnds);gl.uniform3fv(u.uBeamWorldA,rayWorld[0]);gl.uniform3fv(u.uBeamWorldB,rayWorld[1]);gl.uniformMatrix3fv(u.uRingBasisA,false,rings.frames[0].basis);gl.uniformMatrix3fv(u.uRingBasisB,false,rings.frames[1].basis);gl.uniform2f(u.uRingRadii,rings.frames[0].radius,rings.frames[1].radius);gl.uniform1f(u.uGap,rings.geometry.gap);gl.uniform1f(u.uFlowSpeed,config.ringFlowSpeed);gl.uniform1f(u.uTipFade,Math.max(.002,Math.min(.08,config.ringTipFade)));gl.uniformMatrix3fv(u.uBeamBasis,false,bandBasis(rings.pose.direction));gl.uniform1f(u.uRingCount,groups.ring);gl.uniform1f(u.uGapCount,groups.gap);gl.uniform1f(u.uGapOpacity,config.gapOpacity);gl.uniform1f(u.uCoreWidth,config.beamCoreWidth);gl.uniform1f(u.uNeckClearance,rings.geometry.clearanceFraction);gl.uniform1f(u.uTubeBound,rings.geometry.tube);
+   gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform4fv(u.uPlacement,placement);gl.uniform3fv(u.uCenter,center);gl.uniform4fv(u.uBeamEnds,rayEnds);gl.uniform3fv(u.uBeamWorldA,rayWorld[0]);gl.uniform3fv(u.uBeamWorldB,rayWorld[1]);gl.uniformMatrix3fv(u.uRingBasisA,false,rings.frames[0].basis);gl.uniformMatrix3fv(u.uRingBasisB,false,rings.frames[1].basis);gl.uniform2f(u.uRingRadii,rings.frames[0].radius,rings.frames[1].radius);gl.uniform1f(u.uGap,rings.geometry.gap);gl.uniform1f(u.uFlowSpeed,config.ringFlowSpeed);gl.uniform1f(u.uTipFade,Math.max(.002,Math.min(.08,config.ringTipFade)));gl.uniformMatrix3fv(u.uBeamBasis,false,bandBasis(rings.pose.direction));gl.uniform1f(u.uRingCount,groups.ring);gl.uniform1f(u.uGapCount,groups.gap);gl.uniform1f(u.uGapOpacity,config.gapOpacity);gl.uniform1f(u.uBeamRadius,config.beamWorldRadius*placement[2]);gl.uniform1f(u.uGlowRadius,config.beamGlowRadius*placement[2]);gl.uniform1f(u.uNeckClearance,rings.geometry.clearanceFraction);gl.uniform1f(u.uTubeBound,rings.geometry.tube);
    const endRadius=Math.min(Math.max(.012,config.beamDustEndRadius),rings.geometry.radius*.24);
-   gl.uniform1f(u.uDustLength,Math.min(.90,Math.max(.3,config.beamDustLength)));gl.uniform1f(u.uDustWaist,Math.min(Math.max(.001,config.beamDustWaist),endRadius*.5));gl.uniform1f(u.uDustEndRadius,endRadius);gl.uniform1f(u.uDustSpin,config.beamDustSpin);gl.uniform1f(u.uDustFlow,config.beamDustFlow);gl.uniform1f(u.uDustOpacity,Math.min(.35,config.beamHelixOpacity));gl.uniform1f(u.uHelixCount,Math.max(2,Math.min(10,Math.round(config.beamHelixCount))));gl.uniform2f(u.uHelixRadii,Math.max(.1,Math.min(config.beamHelixRadiusMin,config.beamHelixRadiusMax)),Math.min(1,Math.max(config.beamHelixRadiusMin,config.beamHelixRadiusMax)));gl.uniform2f(u.uHelixSpeeds,config.beamHelixSpeedMin,config.beamHelixSpeedMax);gl.uniform1f(u.uHelixReverse,Math.max(0,Math.min(1,config.beamHelixReverse)));gl.uniform1f(u.uHelixTurbulence,Math.max(0,Math.min(.012,config.beamHelixTurbulence)));gl.uniform1f(u.uHelixNoiseSpeed,config.beamHelixNoiseSpeed);
+   gl.uniform1f(u.uDustLength,Math.min(1.1,Math.max(.3,config.beamDustLength)));
+   const rayCenter=[placement[0]*(1-rings.pose.depth*.38),placement[1]*(1-rings.pose.depth*.38),rings.pose.depth],localLimit=config.beamDustLength*.5;
+   const extent=point=>Math.hypot(...point.map((v,i)=>v-rayCenter[i]))/Math.max(.01,placement[2])*.98;
+   gl.uniform2f(u.uDustExtents,Math.min(localLimit,Math.max(.05,extent(rayWorld[0]))),Math.min(localLimit,Math.max(.05,extent(rayWorld[1]))));gl.uniform1f(u.uDustWaist,Math.min(Math.max(.001,config.beamDustWaist),endRadius*.5));gl.uniform1f(u.uDustEndRadius,endRadius);gl.uniform1f(u.uDustSpin,config.beamDustSpin);gl.uniform1f(u.uDustFlow,config.beamDustFlow);gl.uniform1f(u.uDustOpacity,Math.min(.85,config.beamHelixOpacity));gl.uniform1f(u.uHelixCount,Math.max(2,Math.min(10,Math.round(config.beamHelixCount))));gl.uniform2f(u.uHelixRadii,Math.max(.1,Math.min(config.beamHelixRadiusMin,config.beamHelixRadiusMax)),Math.min(1,Math.max(config.beamHelixRadiusMin,config.beamHelixRadiusMax)));gl.uniform2f(u.uHelixSpeeds,config.beamHelixSpeedMin,config.beamHelixSpeedMax);gl.uniform1f(u.uHelixReverse,Math.max(0,Math.min(1,config.beamHelixReverse)));gl.uniform1f(u.uHelixTurbulence,Math.max(0,Math.min(.012,config.beamHelixTurbulence)));gl.uniform1f(u.uHelixNoiseSpeed,config.beamHelixNoiseSpeed);
    gl.uniform1f(u.uBandRadius,rings.geometry.radius);gl.uniform1f(u.uBandThickness,rings.geometry.thickness);gl.uniform1f(u.uBandShear,config.bandShear);gl.uniform1f(u.uTime,age);gl.uniform1f(u.uDpr,dpr);
    gl.uniform4fv(u['uTrail[0]'],trail);gl.uniform1f(u.uRadius,config.repulsionRadius/height);gl.uniform1f(u.uRepulsion,config.repulsionForce);
   }
@@ -177,11 +191,11 @@ export function createCinemaRenderer(canvas){
     groups=nucleusGroups(budget,w,{coarse},config,interlockedRings(0).geometry.gap);
     const ratio=Math.min(devicePixelRatio||1,config.maxDpr,Math.sqrt(1200000/(w*h)));
     if(!force&&w===width&&h===height&&budget===count&&ratio===dpr)return;
-    width=w;height=h;dpr=ratio;count=budget;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);gl.viewport(0,0,canvas.width,canvas.height);
+    width=w;height=h;dpr=ratio;count=budget;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);gl.viewport(0,0,canvas.width,canvas.height);mask.resize(canvas.width,canvas.height);
     state?.dispose();state=createGpuState(gl,count);reset=true;accumulator=0;lastTime=null;
     const mobile=w<=700,aspect=w/h;
-    placement=new Float32Array([mobile?aspect*.02:aspect*.235,mobile?.18:.055,mobile?aspect*1.04:Math.min(1.06,aspect*.75),0]);
-    Object.assign(canvas.dataset,{particleEngine:'gpu-orbital-nucleus',particleCount:String(count),beamMaterial:'depth-tested-core',ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),pixelRatio:dpr.toFixed(2)});
+    placement=new Float32Array([mobile?aspect*.02:aspect*.235,mobile?.18:.055,mobile?aspect*1.04:Math.min(1.06,aspect*.75),aspect]);
+    Object.assign(canvas.dataset,{particleEngine:'gpu-orbital-nucleus',particleCount:String(count),beamMaterial:'world-volume-front-mask',ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),pixelRatio:dpr.toFixed(2)});
    },
    restart(){startTime=null;lastTime=null;reset=true;},
    draw(time,progress=0,trail=emptyTrail,tilt=[0,0]){
@@ -200,23 +214,25 @@ export function createCinemaRenderer(canvas){
     for(const [name,value]of Object.entries({uBandRadius:rings.geometry.radius,uBandThickness:rings.geometry.thickness,uBandHeight:rings.geometry.height,uBandShear:config.bandShear,uTurbulence:config.turbulence,uTurbulenceSpeed:config.turbulenceSpeed,uSpring:config.spring,uDamping:config.damping,uAssemblyDelay:config.assemblyDelay,uAssemblySeconds:config.assemblySeconds,uAspect:width/height,uRecycleWindow:Math.max(1/60,Math.min(.2,elapsed)),uDt:1/60}))gl.uniform1f(su[name],value);
     for(let i=0;i<steps;i++){gl.uniform1f(su.uReset,reset?1:0);state.step();reset=false;}
     accumulator=Math.max(0,accumulator-steps/60);
-    gl.depthMask(true);gl.clearDepth(1);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.BLEND);
-    function scissor(padding){const left=Math.max(0,Math.floor((Math.min(rayEnds[0],rayEnds[2])*height+width*.5-padding)*dpr)),right=Math.min(canvas.width,Math.ceil((Math.max(rayEnds[0],rayEnds[2])*height+width*.5+padding)*dpr));gl.enable(gl.SCISSOR_TEST);gl.scissor(left,0,Math.max(1,right-left),canvas.height);}
-    function drawBeam(pass){
-     uniforms(beam,age,trail);gl.bindVertexArray(null);gl.uniform1f(beam.u.uBeamPass,pass);gl.uniform1f(beam.u.uCoreWidth,config.beamCoreWidth);gl.uniform1f(beam.u.uPulseSpeed,config.beamPulseSpeed);gl.uniform3fv(beam.u.uBeamColor,rgb(config.beamColor));gl.uniform1f(beam.u.uBeamStrength,config.beamStrength);gl.uniform1f(beam.u.uBeamGrowth,intro.beam);scissor(pass?config.beamCoreWidth+1:110);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.SCISSOR_TEST);
-    }
-    // Glow is a backdrop. The actual beam core writes the same 3D depth used by points.
-    gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);drawBeam(0);
-    gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);drawBeam(1);
-    gl.depthMask(false);state.bind();uniforms(points,age,trail);const pu=points.u;
-    gl.uniform3fv(pu.uColorA,rgb(config.colorA));gl.uniform3fv(pu.uColorB,rgb(config.colorB));gl.uniform3fv(pu.uActiveColor,rgb(config.activeColor));gl.uniform3fv(pu.uRingColorA,rgb(config.ringColorA));gl.uniform3fv(pu.uRingColorB,rgb(config.ringColorB));
+    const nearZ=Math.max(rayWorld[0][2],rayWorld[1][2]),farZ=Math.min(rayWorld[0][2],rayWorld[1][2]);
+    const padding=config.beamGlowRadius*placement[2]*height/Math.max(.55,1.-nearZ*.38)*6.3+12;
+    function scissor(){const left=Math.max(0,Math.floor((Math.min(rayEnds[0],rayEnds[2])*height+width*.5-padding)*dpr)),right=Math.min(canvas.width,Math.ceil((Math.max(rayEnds[0],rayEnds[2])*height+width*.5+padding)*dpr));gl.enable(gl.SCISSOR_TEST);gl.scissor(left,0,Math.max(1,right-left),canvas.height);}
+    state.bind();uniforms(points,age,trail);const pu=points.u;
+    gl.uniform3fv(pu.uColorA,rgb(config.colorA));gl.uniform3fv(pu.uColorB,rgb(config.colorB));gl.uniform3fv(pu.uActiveColor,rgb(config.activeColor));gl.uniform3fv(pu.uRingColorA,rgb(config.ringColorA));gl.uniform3fv(pu.uRingColorB,rgb(config.ringColorB));gl.uniform3fv(pu.uHelixColor,rgb(config.beamHelixColor));
     const volumeGain=Math.min(1.7,Math.sqrt(rings.geometry.thickness*rings.geometry.height/(.060*.052))),gain=config.brightness*Math.sqrt(40000/count)*volumeGain;
-    gl.uniform1f(pu.uSize,config.size*3.6);gl.uniform1f(pu.uGain,gain);gl.uniform1f(pu.uOcclusion,0);gl.uniform1f(pu.uFrontCoverage,config.bandFrontCoverage);
-    gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.POINTS,0,count);
-    // Only foreground band particles near the ray use coverage blending, so their
-    // solid centers cover the light while the rest retains its additive sparkle.
-    gl.uniform1f(pu.uOcclusion,1);gl.blendFuncSeparate(gl.ONE,gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);scissor(11);gl.drawArrays(gl.POINTS,0,groups.ring);gl.disable(gl.SCISSOR_TEST);
+    gl.uniform1f(pu.uSize,config.size*3.6);gl.uniform1f(pu.uGain,gain);
+    // Red stores foreground band coverage; green stores foreground helix coverage.
+    gl.bindFramebuffer(gl.FRAMEBUFFER,mask.framebuffer);gl.depthMask(false);gl.disable(gl.DEPTH_TEST);gl.disable(gl.SCISSOR_TEST);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);gl.uniform1f(pu.uRenderPass,1);scissor();gl.drawArrays(gl.POINTS,0,count);gl.disable(gl.SCISSOR_TEST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.depthMask(true);gl.clearDepth(1);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.depthMask(false);
+    // Outside the beam these two additive halves sum to the original appearance.
+    gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.uniform1f(pu.uRenderPass,0);gl.drawArrays(gl.POINTS,0,count);
+    uniforms(beam,age,trail);gl.bindVertexArray(null);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,mask.texture);gl.uniform1i(beam.u.uFrontMask,0);
+    gl.uniform1f(beam.u.uPulseSpeed,config.beamPulseSpeed);gl.uniform3fv(beam.u.uBeamColor,rgb(config.beamColor));gl.uniform1f(beam.u.uBeamStrength,config.beamStrength);gl.uniform1f(beam.u.uBeamGrowth,intro.beam);gl.uniform1f(beam.u.uGlowIntensity,config.beamGlowIntensity);gl.uniform1f(beam.u.uFarAttenuation,config.beamFarAttenuation);gl.uniform1f(beam.u.uMaskStrength,config.beamMaskStrength);gl.uniform1f(beam.u.uHelixMaskStrength,config.helixMaskStrength);
+    gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.ALWAYS);gl.depthMask(true);gl.blendFuncSeparate(gl.ONE,gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);scissor();gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.SCISSOR_TEST);gl.bindTexture(gl.TEXTURE_2D,null);
+    uniforms(points,age,trail);state.bind();gl.depthFunc(gl.LEQUAL);gl.depthMask(false);gl.uniform1f(pu.uRenderPass,2);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.POINTS,0,count);
     gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.bindVertexArray(null);
+    const radius=placement[2]*config.beamWorldRadius*height;
+    Object.assign(canvas.dataset,{beamNearEnd:rayWorld[0][2]>=rayWorld[1][2]?'superior':'inferior',beamNearRadius:(radius/(1-nearZ*.38)).toFixed(3),beamFarRadius:(radius/(1-farZ*.38)).toFixed(3),helixCount:String(config.beamHelixCount),occlusion:'foreground-render-target'});
     canvas.dataset.particlePhase=intro.text<1?'assembling':'orbiting';canvas.dataset.animationTime=age.toFixed(2);
     if(development){if(fpsStart===null)fpsStart=performance.now();fpsFrames++;const elapsed=performance.now()-fpsStart;if(elapsed>1200){canvas.dataset.fps=(fpsFrames*1000/elapsed).toFixed(1);fpsStart=performance.now();fpsFrames=0;}}
     return intro;
@@ -229,8 +245,8 @@ export function createCinemaRenderer(canvas){
     for(const [key,min,max,step,label]of[['bandRadius',.18,.4,.005,'Radio de banda'],['bandThickness',.025,.14,.005,'Grosor radial'],['bandHeight',.025,.14,.005,'Grosor vertical'],['bandShear',.5,2,.05,'Diferencia de velocidad'],['ringFlowSpeed',.03,.5,.01,'Velocidad de flujo'],['ringGapDegrees',15,60,1,'Apertura de los huecos'],['ringLagA',0,2,.05,'Retraso C azul'],['ringLagB',0,2,.05,'Retraso C violeta'],['ringWobble',0,3,.1,'Bamboleo propio'],['ringBreath',0,.008,.001,'Respiración'],['ringOrientation',20,60,1,'Ángulo del conjunto'],['ringTipFade',.003,.04,.001,'Desvanecer puntas'],['turbulence',0,.08,.001,'Turbulencia'],['turbulenceSpeed',.02,.3,.005,'Ritmo de turbulencia'],['brightness',.2,1.5,.01,'Brillo'],['size',.7,3,.05,'Tamaño'],['beamStrength',.5,3,.05,'Luz central']]){const control=core.add(config,key,min,max,step).name(label);if(key==='ringGapDegrees')control.onFinishChange(refresh);}core.close();
     const gap=gui.addFolder('Flujo del hueco');gap.add(config,'gapDensity',0,.12,.005).name('Densidad relativa').onFinishChange(refresh);gap.add(config,'gapOpacity',.02,.25,.01).name('Opacidad');gap.close();
     const dust=gui.addFolder('Reloj de partículas del rayo');dust.add(config,'beamDustCount',0,5000,100).name('Cantidad escritorio').onFinishChange(refresh);dust.add(config,'mobileBeamDustCount',0,1500,50).name('Cantidad móvil').onFinishChange(refresh);
-    for(const [key,min,max,step,label]of[['beamDustLength',.3,.9,.02,'Largo'],['beamDustWaist',.001,.012,.001,'Radio del centro'],['beamDustEndRadius',.015,.07,.005,'Radio de extremos'],['beamDustSpin',.2,1.5,.05,'Giro'],['beamDustFlow',.015,.09,.005,'Flujo axial'],['beamHelixOpacity',.05,.35,.01,'Opacidad']])dust.add(config,key,min,max,step).name(label);dust.close();
-    const helices=gui.addFolder('Hélices y profundidad');for(const [key,min,max,step]of[['beamHelixCount',2,10,1],['beamHelixRadiusMin',.1,.6,.02],['beamHelixRadiusMax',.6,1,.02],['beamHelixSpeedMin',.2,1,.05],['beamHelixSpeedMax',1,2,.05],['beamHelixReverse',0,1,.05],['beamHelixTurbulence',0,.012,.001],['beamHelixNoiseSpeed',.05,.5,.01],['bandFrontCoverage',.8,3,.1],['beamCoreWidth',1.5,3.5,.1]])helices.add(config,key,min,max,step);helices.close();
+    for(const [key,min,max,step,label]of[['beamDustLength',.3,1.1,.02,'Largo'],['beamDustWaist',.005,.025,.001,'Radio del centro'],['beamDustEndRadius',.015,.07,.005,'Radio de extremos'],['beamDustSpin',.2,1.5,.05,'Giro'],['beamDustFlow',.015,.09,.005,'Flujo axial'],['beamHelixOpacity',.15,.85,.01,'Opacidad']])dust.add(config,key,min,max,step).name(label);dust.close();
+    const helices=gui.addFolder('Hélices y profundidad');for(const [key,min,max,step]of[['beamHelixCount',2,10,1],['beamHelixRadiusMin',.1,.6,.02],['beamHelixRadiusMax',.6,1,.02],['beamHelixSpeedMin',.2,1,.05],['beamHelixSpeedMax',1,2,.05],['beamHelixReverse',0,1,.05],['beamHelixTurbulence',0,.012,.001],['beamHelixNoiseSpeed',.05,.5,.01],['beamWorldRadius',.0015,.006,.00025],['beamGlowRadius',.008,.035,.001],['beamGlowIntensity',.3,1,.05],['beamFarAttenuation',.1,.7,.05],['beamMaskStrength',1,2.5,.1],['helixMaskStrength',.6,2,.1]])helices.add(config,key,min,max,step);helices.addColor(config,'beamHelixColor').name('Color de hélices');helices.close();
     const movement=gui.addFolder('Reloj de arena');for(const [key,min,max,step]of[['beamCycleSeconds',25,100,1],['beamMaxAngle',5,40,1],['beamDepthAmplitude',.05,.5,.01],['beamPulseSpeed',.05,.4,.005]])movement.add(config,key,min,max,step);movement.close();
     const sensor=gui.addFolder('Inclinación móvil');for(const [key,min,max,step]of[['gyroRange',10,40,1],['gyroMaxDisplacement',5,30,1],['gyroSmoothing',.1,.8,.01],['gyroMaxTilt',0,5,.25],['gyroBackPixels',0,12,1],['gyroCorePixels',0,20,1],['gyroFrontPixels',0,25,1],['gyroAuroraPixels',0,8,1]])sensor.add(config,key,min,max,step);sensor.close();
     const aurora=gui.addFolder('Aurora');for(const [key,min,max,step]of[['auroraIntensity',0,.3,.01],['auroraSpeed',.005,.08,.005],['auroraNoiseScale',.8,4,.1],['auroraCurtains',1,4,1],['auroraScroll',0,1,.05],['auroraPointer',0,1.5,.05]])aurora.add(config,key,min,max,step);for(const key of ['auroraColorA','auroraColorB','auroraColorC','auroraColorD'])aurora.addColor(config,key);aurora.add(config,'auroraResolution',.2,.5,.05).onFinishChange(refresh);aurora.add(config,'auroraMobileResolution',.2,.4,.02).onFinishChange(refresh);aurora.close();

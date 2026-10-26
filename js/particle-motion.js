@@ -1,11 +1,11 @@
 import {PARTICLE_CONFIG as config} from './particle-config.js';
 export const normalize3=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n);};
 export function beamPose(time,tilt=[0,0],blend=1){
- const phase=time*2*Math.PI/Math.max(1,config.beamCycleSeconds)+Math.PI*.5;
+ const phase=time*2*Math.PI/Math.max(1,config.beamCycleSeconds);
  const maxSlope=Math.tan(config.beamMaxAngle*Math.PI/180)*blend;
  const gyro=config.gyroMaxTilt*Math.PI/180/Math.max(1,Math.hypot(tilt[0],tilt[1]));
- const direction=normalize3([Math.sin(phase)*maxSlope+tilt[0]*gyro,1,Math.cos(phase)*Math.min(maxSlope,config.beamDepthAmplitude*.85)+tilt[1]*gyro]);
- return {direction,depth:Math.cos(phase)*config.beamDepthAmplitude*blend};
+ const direction=normalize3([Math.sin(phase)*maxSlope+tilt[0]*gyro,1,Math.cos(phase)*maxSlope+tilt[1]*gyro]);
+ return {direction,depth:Math.sin(phase)*config.beamDepthAmplitude*blend};
 }
 export function bandBasis(direction){
  const x=normalize3([direction[1],-direction[0],0]);
@@ -55,7 +55,19 @@ export function beamEndpoints(pose,placement,growth=1){
  return new Float32Array([...a,...b]);
 }
 export function beamWorldEndpoints(pose,placement,growth=1){
- const center=[placement[0]*(1-pose.depth*.38),placement[1]*(1-pose.depth*.38),pose.depth],extent=placement[2]*.49*growth;
- return [center.map((v,i)=>v+pose.direction[i]*extent),center.map((v,i)=>v-pose.direction[i]*extent)];
+ const center=[placement[0]*(1-pose.depth*.38),placement[1]*(1-pose.depth*.38),pose.depth],maximum=placement[2]*config.beamLength*.5;
+ const w=1-center[2]*.38,aspect=placement[3]||Infinity;
+ // Trim only the tips to the visible frustum; the radius remains a world unit.
+ return [1,-1].map(sign=>{
+  let extent=maximum;
+  for(const [coordinate,min,max]of [[0,-aspect*.5+.04,aspect*.5-.04],[1,-.45,.38]]){
+   if(!Number.isFinite(min))continue;
+   const d=pose.direction[coordinate]*sign,dz=pose.direction[2]*sign;
+   const upper=d+max*.38*dz,lower=-d-min*.38*dz;
+   if(upper>0)extent=Math.min(extent,(max*w-center[coordinate])/upper);
+   if(lower>0)extent=Math.min(extent,(center[coordinate]-min*w)/lower);
+  }
+  return center.map((v,i)=>v+sign*pose.direction[i]*Math.max(.01,extent)*growth);
+ });
 }
 export function projectedDepth(z){const distance=1/.38-z;return 10/9.9-1/(9.9*distance);}

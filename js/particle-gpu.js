@@ -33,6 +33,32 @@ float beamFraction(vec2 screen){vec2 d=uBeamEnds.zw-uBeamEnds.xy;return clamp(do
 float beamWorldDepth(float t){float a=(1.-t)/(1.-uBeamWorldA.z*.38),b=t/(1.-uBeamWorldB.z*.38);return (a*uBeamWorldA.z+b*uBeamWorldB.z)/max(a+b,.000001);}
 float beamDistance(vec2 screen,float t){return length(screen-mix(uBeamEnds.xy,uBeamEnds.zw,t));}
 `;
+export const beamVolume=`
+uniform float uBeamRadius,uGlowRadius;
+struct BeamSample{vec3 axis;float distance;float along;float surfaceZ;float scale;};
+BeamSample sampleBeam(vec2 screen){
+ vec3 camera=vec3(0.,0.,1./.38),ray=normalize(vec3(screen,-1./.38));
+ vec3 segment=uBeamWorldB-uBeamWorldA;float len=max(.00001,length(segment));vec3 axis=segment/len,offset=camera-uBeamWorldA;
+ float parallel=dot(ray,axis),denominator=max(.00001,1.-parallel*parallel);
+ float along=clamp((dot(offset,axis)-parallel*dot(offset,ray))/denominator,0.,len);
+ vec3 closest=uBeamWorldA+axis*along;float travel=dot(closest-camera,ray);
+ float distance=length(camera+ray*travel-closest),surface=closest.z;
+ if(distance<uBeamRadius){float nearTravel=travel-sqrt(max(0.,uBeamRadius*uBeamRadius-distance*distance)/denominator);surface=(camera+ray*nearTravel).z;}
+ BeamSample hit;hit.axis=closest;hit.distance=distance;hit.along=along/len;hit.surfaceZ=surface;hit.scale=1./max(.55,1.-closest.z*.38);return hit;
+}
+`;
+export function createParticleMask(gl){
+ const texture=gl.createTexture(),framebuffer=gl.createFramebuffer();let width=0,height=0,disposed=false;
+ gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.bindTexture(gl.TEXTURE_2D,null);
+ return {texture,framebuffer,
+  resize(w,h){
+   if(disposed||width===w&&height===h)return;width=w;height=h;
+   const previous=gl.getParameter(gl.FRAMEBUFFER_BINDING);gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
+   const complete=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;gl.bindFramebuffer(gl.FRAMEBUFFER,previous);gl.bindTexture(gl.TEXTURE_2D,null);if(!complete)throw new Error('No se pudo crear la máscara de partículas delanteras.');
+  },
+  dispose(){if(disposed)return;disposed=true;gl.deleteTexture(texture);gl.deleteFramebuffer(framebuffer);}
+ };
+}
 export const fullscreenVertex=`#version 300 es
 void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`;
 export const emptyFragment=`#version 300 es
