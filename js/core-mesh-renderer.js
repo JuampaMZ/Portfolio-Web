@@ -43,7 +43,7 @@ void main(){float radial=.50+.50*pow(abs(vNormal.z),.6);float pulse=1.+.08*sin(v
 
 export function createMeshCore(canvas,{singleRing=false,debug=false,inspection=false}={}){
  const settings=config;
- let renderer,resources,state,geometry,attribute,gui,disposed=false,count=0,width=0,height=0,dpr=1,reset=true,startTime=null,lastTime=null,accumulator=0,fpsStart=0,fpsFrames=0;const attributes=new Map();
+ let renderer,resources,state,geometry,attribute,gui,disposed=false,count=0,width=0,height=0,dpr=1,reset=true,startTime=null,lastTime=null,fpsStart=0,fpsFrames=0;const attributes=new Map();
  try{
   renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:false,premultipliedAlpha:true,powerPreference:'high-performance'});
   const gl=renderer.getContext();renderer.setClearColor(0x000000,0);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.;
@@ -77,23 +77,23 @@ export function createMeshCore(canvas,{singleRing=false,debug=false,inspection=f
    const bloomScale=w<=700?settings.bloomMobileResolution:settings.bloomResolution;bloom.setSize(Math.round(canvas.width*bloomScale),Math.round(canvas.height*bloomScale));halfView=Math.tan(settings.cameraFov*Math.PI/360);camera.fov=settings.cameraFov;camera.position.z=settings.cameraDistance;camera.aspect=w/h;camera.updateProjectionMatrix();
    releaseGeometry();renderer.resetState();state=createMeshGpuState(gl,count);renderer.resetState();
    geometry=new THREE.BufferGeometry();geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(),10);attribute=new THREE.GLBufferAttribute(state.position,gl.FLOAT,3,4,count);geometry.setAttribute('position',attribute);geometry.setDrawRange(0,count);particles.geometry=geometry;
-   groups=singleRing?{ring:count,gap:0,dust:0}:nucleusGroups(count,w,{coarse},settings,interlockedRings(0).geometry.gap);reset=true;lastTime=null;accumulator=0;
+   groups=singleRing?{ring:count,gap:0,dust:0}:nucleusGroups(count,w,{coarse},settings,interlockedRings(0).geometry.gap);reset=true;lastTime=null;
    placement=new Float32Array([0,0,w<=700?Math.min(.52,w/h*1.04):.82,0]);
    Object.assign(canvas.dataset,{particleEngine:'three-mesh-gpu',particleCount:String(count),ringCount:String(groups.ring),gapCount:String(groups.gap),beamDustCount:String(groups.dust),beamMaterial:'CylinderGeometry',camera:'PerspectiveCamera',fov:String(camera.fov),occlusion:'depth-buffer-normal-alpha',pixelRatio:dpr.toFixed(2),bloom:'postprocess-after-depth'});
   }
   function draw(time,progress=0,trail=empty,tilt=[0,0]){
    if(disposed||!state||gl.isContextLost())return;if(startTime===null)startTime=time;
-   const age=time-startTime,elapsed=lastTime===null?0:Math.max(0,time-lastTime);lastTime=time;accumulator+=Math.min(1/30,elapsed);
-   let steps=Math.min(2,Math.floor((accumulator+1e-8)*60));if(reset||age<settings.assemblyDelay+settings.assemblySeconds)steps=Math.max(1,steps);
+   const age=time-startTime,elapsed=lastTime===null?0:Math.max(0,time-lastTime),dt=Math.min(1/30,elapsed);lastTime=time;
+   const shouldStep=reset||dt>0||age<settings.assemblyDelay+settings.assemblySeconds;
    const offset=tiltOffset(tilt,settings.gyroCorePixels,height),mobile=width<=700;
    screenCenter=singleRing?[0,0]:[(mobile?width/height*.02:width/height*.235)+offset[0],(mobile?.18:.055)-progress*.022+offset[1]];
    camera.setViewOffset(width,height,-screenCenter[0]*height,screenCenter[1]*height,width,height);camera.updateMatrixWorld();
    const ramp=Math.max(0,Math.min(1,(age-settings.beamSeconds)/3)),motion=ramp*ramp*(3-2*ramp);
    rings=interlockedRings(age,tilt,motion);center=new Float32Array([0,0,rings.pose.depth]);
    const data=values(age,trail);
-   if(steps){simulationUniforms({...data,uDt:1/60,uRecycleWindow:Math.max(1/60,Math.min(.2,elapsed))});
-    for(let i=0;i<steps;i++){gl.uniform1f(simulation.u.uReset,reset?1:0);state.step();reset=false;}renderer.resetState();
-   }accumulator=Math.max(0,accumulator-steps/60);
+   if(shouldStep){simulationUniforms({...data,uDt:dt||1/60,uRecycleWindow:Math.max(1/60,Math.min(.2,elapsed))});
+    gl.uniform1f(simulation.u.uReset,reset?1:0);state.step();reset=false;renderer.resetState();
+   }
    if(!attributes.has(state.position))attributes.set(state.position,new THREE.GLBufferAttribute(state.position,gl.FLOAT,3,4,count));attribute=attributes.get(state.position);geometry.setAttribute('position',attribute);
    for(const [name,value]of Object.entries(data)){if(uniforms[name])uniforms[name].value=value;}uniforms.uTrail={value:trail};
    uniforms.uBeamBasis.value=new THREE.Matrix3().fromArray(data.uBeamBasis);uniforms.uRingBasisA.value=new THREE.Matrix3().fromArray(data.uRingBasisA);uniforms.uRingBasisB.value=new THREE.Matrix3().fromArray(data.uRingBasisB);

@@ -24,7 +24,7 @@ Las dos C conservan el volumen, el centro denso, los bordes difusos, el flujo op
 
 ## Simulación y recursos
 
-Transform feedback integra posiciones, velocidades, resortes y fuerzas del puntero en GPU. Dos pares de buffers separados se alternan; Three.js lee el buffer activo mediante `GLBufferAttribute`. No hay copias de posición a CPU ni recorridos por partícula en JS por frame. Las lecturas de píxeles y buffers pertenecen exclusivamente a las páginas locales de prueba.
+Transform feedback integra posiciones, velocidades, resortes y fuerzas del puntero en GPU. Hay como máximo un paso por frame, con delta acotado a 1/30 s, para evitar duplicar trabajo cuando baja la frecuencia. Dos pares de buffers separados se alternan; Three.js lee el buffer activo mediante `GLBufferAttribute`. No hay copias de posición a CPU ni recorridos por partícula en JS por frame. Las lecturas de píxeles y buffers pertenecen exclusivamente a las páginas locales de prueba.
 
 El presupuesto total sigue en 60.000 partículas para escritorio y 19.000 para móvil; se reduce en dispositivos con poca memoria. El DPR nunca supera 2. Mouse y touch comparten una estela pasiva; el desplazamiento natural de la página permanece disponible. La animación autónoma solo se suspende al ocultar la pestaña. La inclinación móvil conserva referencia relativa, límites, suavizado y permiso de iOS dentro del primer gesto válido.
 
