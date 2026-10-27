@@ -1,0 +1,176 @@
+{
+  "before": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "quality": "desktop-hdr",
+    "hdr": "true",
+    "variant": "A",
+    "particles": "10126",
+    "durationMs": 10414.600000023842,
+    "longTasks": [
+      {
+        "start": 6602.199999988079,
+        "duration": 56,
+        "blocking": 0,
+        "scripts": []
+      },
+      {
+        "start": 8081.899999976158,
+        "duration": 58,
+        "blocking": 0,
+        "scripts": []
+      }
+    ],
+    "longFrames": [
+      {
+        "start": 8081,
+        "duration": 55.59999996423721,
+        "blocking": 4.6,
+        "scripts": [
+          {
+            "url": "http://localhost:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 23.399999976158142
+          }
+        ]
+      },
+      {
+        "start": 14593.399999976158,
+        "duration": 112.19999998807907,
+        "blocking": 0,
+        "scripts": []
+      }
+    ],
+    "meanFrameMs": 22.301070663862617,
+    "phases": [
+      {
+        "t": 0.007000000023841494,
+        "phase": "singularity",
+        "progress": "0.00000",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 0.5926000000238418,
+        "phase": "explosion",
+        "progress": "0.11087",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 1.2722000000238423,
+        "phase": "expansion",
+        "progress": "0.30013",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 2.3715000000238415,
+        "phase": "absorption",
+        "progress": "0.60473",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 3.453600000023842,
+        "phase": "formed",
+        "progress": "0.90537",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 5.7518000000238425,
+        "phase": "absorption",
+        "progress": "0.89855",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 6.851300000023842,
+        "phase": "expansion",
+        "progress": "0.59550",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 7.933600000023842,
+        "phase": "explosion",
+        "progress": "0.29452",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 8.64940000002384,
+        "phase": "singularity",
+        "progress": "0.09975",
+        "engine": "three-mesh-gpu"
+      }
+    ],
+    "finalProgress": "0.00000"
+  },
+  "after": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "quality": "desktop-hdr",
+    "hdr": "true",
+    "variant": "A",
+    "particles": "10126",
+    "durationMs": 10410.900000047684,
+    "longTasks": [],
+    "longFrames": [],
+    "meanFrameMs": 20.059537572346212,
+    "phases": [
+      {
+        "t": 0.002800000047683625,
+        "phase": "singularity",
+        "progress": "0.00000",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 0.5522000000476838,
+        "phase": "explosion",
+        "progress": "0.10317",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 1.2852000000476838,
+        "phase": "expansion",
+        "progress": "0.30374",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 2.401100000047683,
+        "phase": "absorption",
+        "progress": "0.61282",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 3.433300000047684,
+        "phase": "formed",
+        "progress": "0.90015",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 5.748300000047684,
+        "phase": "absorption",
+        "progress": "0.89913",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 6.864100000047683,
+        "phase": "expansion",
+        "progress": "0.59134",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 7.913200000047683,
+        "phase": "explosion",
+        "progress": "0.29964",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 8.629400000047685,
+        "phase": "singularity",
+        "progress": "0.09978",
+        "engine": "three-mesh-gpu"
+      }
+    ],
+    "finalProgress": "0.00000"
+  }
+}

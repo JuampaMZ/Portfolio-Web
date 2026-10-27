@@ -1,0 +1,29 @@
+{
+  "mobileValidation": "Viewport only; no physical Safari or mobile GPU emulation available",
+  "colorDepthChecks": 54,
+  "gpuMobileRgba8": "passed",
+  "gpuDesktop": "passed",
+  "contextRecovery": "HDR -> Canvas2D -> RGBA8",
+  "guiVariantSwitch": "passed",
+  "captures": {
+    "mobile": [
+      "390x844 HDR B",
+      "412x915 RGBA8 A",
+      "412x915 Canvas2D A"
+    ],
+    "timeSeconds": 58,
+    "phases": [
+      0.05,
+      0.14,
+      0.55,
+      0.76,
+      1
+    ],
+    "variants": [
+      "A",
+      "B"
+    ]
+  },
+  "checkpoint": "b7b4984",
+  "sphereDepthMaxError": 7.89E-08
+}

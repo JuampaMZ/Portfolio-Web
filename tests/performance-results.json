@@ -1,0 +1,75 @@
+{
+  "protocol": "Whole-page RAF; warmup >=6s; sample >=8s; one animated tab; same browser host; viewport is not a physical phone",
+  "beforeDesktop": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "dpr": 1,
+    "particles": 60000,
+    "samples": 379,
+    "durationMs": 8009.9,
+    "meanMs": 21.13,
+    "medianMs": 16.9,
+    "p95Ms": 33.5,
+    "fps": 47.32,
+    "framesOver25ms": 100,
+    "meanCommandMs": 1.95,
+    "cores": 8,
+    "memoryGB": 16
+  },
+  "afterDesktop": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "dpr": 0.8,
+    "particles": 6500,
+    "samples": 452,
+    "durationMs": 8010.1,
+    "meanMs": 17.72,
+    "medianMs": 16.7,
+    "p95Ms": 33.1,
+    "fps": 56.43,
+    "framesOver25ms": 28,
+    "meanCommandMs": 2.75,
+    "cores": 8,
+    "memoryGB": 16
+  },
+  "beforeMobile": {
+    "viewport": [
+      390,
+      844
+    ],
+    "dpr": 1,
+    "particles": 19000,
+    "samples": 481,
+    "durationMs": 8010,
+    "meanMs": 16.65,
+    "medianMs": 16.7,
+    "p95Ms": 16.9,
+    "fps": 60.05,
+    "framesOver25ms": 0,
+    "meanCommandMs": 0.68,
+    "cores": 8,
+    "memoryGB": 16
+  },
+  "afterMobile": {
+    "viewport": [
+      390,
+      844
+    ],
+    "dpr": 1,
+    "particles": 3200,
+    "samples": 481,
+    "durationMs": 8010,
+    "meanMs": 16.65,
+    "medianMs": 16.7,
+    "p95Ms": 16.9,
+    "fps": 60.05,
+    "framesOver25ms": 0,
+    "meanCommandMs": 0.84,
+    "cores": 8,
+    "memoryGB": 16
+  }
+}

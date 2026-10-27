@@ -1,0 +1,81 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Verificación GPU de galaxia y aurora</title>
+<style>body{margin:20px;background:#04080d;color:#e9efff;font:14px system-ui}canvas{width:760px;height:500px;max-width:100%;border:1px solid #31445f}pre{white-space:pre-wrap}button{padding:10px;margin-bottom:12px}</style>
+<h1>Verificación GPU de galaxia y aurora</h1><button id="run">Ejecutar comprobaciones</button><pre id="result">Listo para comprobar.</pre><div id="canvases"></div>
+<script type="module">
+import {initAtmosphere,createGalaxyRenderer,galaxySource} from '../js/atmosphere.js';
+import {createAuroraRenderer} from '../js/aurora-renderer.js';
+import {PARTICLE_CONFIG as config} from '../js/particle-config.js';
+import {gpuMath,emptyFragment,createGpuResources,createGpuState} from '../js/particle-gpu.js';
+const output=document.querySelector('pre'),host=document.querySelector('#canvases');
+function tracked(){
+ const canvas=document.createElement('canvas');host.append(canvas);
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:true});
+ const kinds=['Buffer','Program','Shader','VertexArray','TransformFeedback','Texture','Framebuffer'],resources=new Map(kinds.map(kind=>[kind,new Set()]));
+ for(const kind of kinds){
+  const create=gl['create'+kind].bind(gl),destroy=gl['delete'+kind].bind(gl);
+  gl['create'+kind]=(...args)=>{const value=create(...args);resources.get(kind).add(value);return value;};
+  gl['delete'+kind]=value=>{resources.get(kind).delete(value);return destroy(value);};
+ }
+ let latest=null;const draw=gl.drawArrays.bind(gl);
+ gl.drawArrays=(...args)=>{if(!gl.isEnabled(gl.RASTERIZER_DISCARD))latest=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);return draw(...args);};
+ return {canvas,gl,resources,pixel(x,y){const p=new Uint8Array(4);gl.readPixels(x,y,1,1,gl.RGBA,gl.UNSIGNED_BYTE,p);return [...p];},sample(offset=0,count=256){const data=new Float32Array(count*6);gl.bindBuffer(gl.ARRAY_BUFFER,latest);gl.getBufferSubData(gl.ARRAY_BUFFER,offset*24,data);gl.bindBuffer(gl.ARRAY_BUFFER,null);return data;}};
+}
+document.querySelector('button').addEventListener('click',async()=>{
+ output.textContent='Ejecutando comprobaciones GPU…';await new Promise(requestAnimationFrame);
+ const results=[],assert=(condition,label)=>{if(!condition)throw new Error(label);results.push('✓ '+label);};
+ let field=null,atmosphere=null,aurora=null,foreground=null,travelState=null,travelResources=null;const oldRadius=config.repulsionRadius,oldHalo=config.planetHalo,oldTrail=config.planetTrail;
+ try{
+  const empty=new Float32Array(32);
+  const travel=tracked(),gl=travel.gl;travelResources=createGpuResources(gl);
+  const routeVertex=`#version 300 es
+precision highp float;out vec3 nextPosition,nextVelocity;
+`+gpuMath+galaxySource+`
+void main(){Journey trip=journey(float(gl_VertexID),uTime);nextPosition=trip.position;nextVelocity=vec3(trip.direction,trip.visibility);gl_Position=vec4(0.);}`;
+  const route=travelResources.program(routeVertex,emptyFragment,['uResolution','uTime','uLayer','uCount','uSmallCount','uSpeed','uDepthRatio','uMediumSpeed','uFrontSpeed'],true);travelState=createGpuState(gl,256);gl.useProgram(route.program);
+  gl.uniform2f(route.u.uResolution,800,500);for(const [key,value]of Object.entries({uLayer:0,uCount:256,uSmallCount:256,uSpeed:config.travelSpeed,uDepthRatio:config.depthTravelRatio,uMediumSpeed:config.mediumSpeed,uFrontSpeed:config.frontSpeed}))gl.uniform1f(route.u[key],value);
+  const travelFrame=time=>{gl.uniform1f(route.u.uTime,time);travelState.step();travelState.bind();const data=new Float32Array(256*6),buffer=gl.getVertexAttrib(0,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);return data;};
+  const trip0=travelFrame(0),trip1=travelFrame(.5),trip2=travelFrame(1),tripLater=travelFrame(90);let linear=0,depthTravel=0,newCourses=0;
+  for(let i=0;i<trip0.length;i+=6){
+   if(Math.hypot(trip0[i+3]-trip2[i+3],trip0[i+4]-trip2[i+4])<.00001&&Math.hypot(trip2[i]-trip1[i],trip2[i+1]-trip1[i+1])>.00001&&Math.hypot(trip2[i]-2*trip1[i]+trip0[i],trip2[i+1]-2*trip1[i+1]+trip0[i+1])<.00001)linear++;
+   if(Math.abs(trip2[i+2]-trip0[i+2])>.00001)depthTravel++;
+   if(Math.hypot(tripLater[i+3]-trip0[i+3],tripLater[i+4]-trip0[i+4])>.01)newCourses++;
+  }
+  assert(linear>245,'Viajes largos con dirección y velocidad constantes entre entradas');assert(depthTravel>40,'Una proporción de cuerpos viaja en profundidad');assert(newCourses>30,'Al reaparecer se generan trayectorias nuevas');assert([...tripLater].every(Number.isFinite)&&gl.getError()===gl.NO_ERROR,'Viajes finitos sin errores WebGL');
+  travelState.dispose();travelResources.dispose();assert([...travel.resources.values()].every(values=>values.size===0),'Desmontaje libera los recursos de la prueba de viaje');
+  const g=tracked();field=createGalaxyRenderer(g.canvas);field.resize();config.repulsionRadius=5000;
+  field.draw(0,empty);const wide=new Float32Array(32);wide.set([0,0,1,1]);
+  for(let i=1;i<=30;i++)field.draw(i/60,wide);
+  const diverted=g.sample();assert(Math.hypot(diverted[0],diverted[1])>.01,'El campo galáctico también esquiva el puntero en GPU');
+  field.draw(31/60,empty);assert(Math.hypot(...g.sample().slice(0,2))>.005,'El campo conserva la estela con inercia');
+  for(let i=32;i<=210;i++)field.draw(i/60,empty);
+  assert(Math.hypot(...g.sample().slice(0,2))<.002,'Las estrellas retoman su deriva original');
+  assert(g.gl.getError()===g.gl.NO_ERROR,'Galaxia sin errores WebGL');field.dispose();assert([...g.resources.values()].every(values=>values.size===0),'Desmontaje libera todos los recursos galácticos');
+  config.repulsionRadius=oldRadius;
+  const near=tracked();foreground=createGalaxyRenderer(near.canvas,true);foreground.resize();
+  const foregroundAlpha=()=>{const pixels=new Uint8Array(near.canvas.width*near.canvas.height*4);near.gl.readPixels(0,0,near.canvas.width,near.canvas.height,near.gl.RGBA,near.gl.UNSIGNED_BYTE,pixels);let sum=0;for(let i=3;i<pixels.length;i+=4)sum+=pixels[i];return sum;};
+  foreground.draw(0,empty);const unmasked=foregroundAlpha();assert(unmasked>100,'Bokeh frontal visible en GPU');
+  config.planetHalo=0;config.planetTrail=0;foreground.draw(0,empty);assert(foregroundAlpha()<unmasked,'Halo y estela tienen controles independientes efectivos');config.planetHalo=oldHalo;config.planetTrail=oldTrail;
+  const textMask=new Float32Array(48);textMask.set([-10,-10,10,10]);foreground.draw(0,empty,textMask,1);
+  assert(foregroundAlpha()<unmasked*.2,'La capa frontal protege el texto y evita concentraciones');
+  assert(near.gl.getError()===near.gl.NO_ERROR,'Bokeh frontal sin errores WebGL');foreground.dispose();assert([...near.resources.values()].every(values=>values.size===0),'Desmontaje libera los recursos frontales');
+  const sky=tracked();aurora=createAuroraRenderer(sky.canvas);assert(Boolean(aurora),'Shader de aurora compilado');aurora.resize();
+  const frame=()=>{const data=new Uint8Array(sky.canvas.width*sky.canvas.height*4);sky.gl.readPixels(0,0,sky.canvas.width,sky.canvas.height,sky.gl.RGBA,sky.gl.UNSIGNED_BYTE,data);return data;};
+  const alphaSum=data=>{let sum=0;for(let i=3;i<data.length;i+=4)sum+=data[i];return sum;};
+  const difference=(x,y)=>{let sum=0;for(let i=0;i<x.length;i++)sum+=Math.abs(x[i]-y[i]);return sum;};
+  aurora.draw(0,0,empty);const initialSky=frame();assert(alphaSum(initialSky)>1000,'Aurora visible y generada en GPU');
+  aurora.draw(20,0,empty);const flowingSky=frame();assert(difference(initialSky,flowingSky)>1000,'Aurora cambia sin depender del scroll');
+  aurora.draw(20,2,empty);const scrolledSky=frame();assert(difference(flowingSky,scrolledSky)>1000,'Scroll desplaza y cambia las cortinas y su paleta');
+  let brightest=3;for(let i=7;i<scrolledSky.length;i+=4)if(scrolledSky[i]>scrolledSky[brightest])brightest=i;
+  const pixel=(brightest-3)/4,w=sky.canvas.width,h=sky.canvas.height,auroraTrail=new Float32Array(32);auroraTrail.set([((pixel%w)+.5-w*.5)/h,(Math.floor(pixel/w)+.5-h*.5)/h,1,1]);
+  aurora.draw(20,2,auroraTrail);assert(difference(scrolledSky,frame())>50,'Puntero perturba localmente la aurora');
+  const mask=new Float32Array(48);mask.set([-10,-10,10,10]);aurora.draw(20,2,empty,mask,1);assert(alphaSum(frame())<alphaSum(scrolledSky)*.5,'Aurora baja su intensidad detrás del texto');
+  assert(Number(sky.canvas.dataset.resolutionScale)<=.5,'Aurora usa resolución reducida');assert(sky.gl.getError()===sky.gl.NO_ERROR,'Aurora sin errores WebGL');
+  aurora.dispose();assert([...sky.resources.values()].every(values=>values.size===0),'Desmontaje libera los recursos de la aurora');
+  atmosphere=initAtmosphere();
+  assert(document.querySelectorAll('.ambient-layer').length===2&&document.querySelector('.aurora-layer'),'Capas de fondo, frente y nebulosa creadas');
+  atmosphere.dispose();assert(document.querySelectorAll('.ambient-layer,.aurora-layer').length===0,'Desmontaje retira canvas, nebulosa y listeners');
+  output.textContent=results.join('\n')+'\n\nTODAS LAS COMPROBACIONES CORRECTAS';output.dataset.status='passed';
+ }catch(error){output.textContent=results.join('\n')+'\n✗ '+error.message;output.dataset.status='failed';console.error(error);}
+ finally{config.repulsionRadius=oldRadius;config.planetHalo=oldHalo;config.planetTrail=oldTrail;travelState?.dispose();travelResources?.dispose();field?.dispose();foreground?.dispose();aurora?.dispose();atmosphere?.dispose();}
+});
+</script></html>

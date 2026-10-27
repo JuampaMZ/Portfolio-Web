@@ -1,0 +1,370 @@
+{
+  "before": {
+    "supported": [
+      "element",
+      "event",
+      "first-input",
+      "interaction-contentful-paint",
+      "largest-contentful-paint",
+      "layout-shift",
+      "long-animation-frame",
+      "longtask",
+      "mark",
+      "measure",
+      "navigation",
+      "paint",
+      "resource",
+      "soft-navigation",
+      "visibility-state"
+    ],
+    "preparationMs": 340,
+    "introLongTasks": [],
+    "preparationLongTasks": [
+      {
+        "start": 128.30000001192093,
+        "duration": 51,
+        "blocking": 0,
+        "scripts": []
+      },
+      {
+        "start": 267.4000000357628,
+        "duration": 107,
+        "blocking": 0,
+        "scripts": []
+      }
+    ],
+    "longFrames": [
+      {
+        "start": 442.4000000357628,
+        "duration": 77.80000001192093,
+        "blocking": 0,
+        "scripts": [
+          {
+            "name": "",
+            "url": "http://127.0.0.1:4173/js/atmosphere.js",
+            "duration": 9.700000047683716
+          },
+          {
+            "name": "",
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "duration": 7.799999952316284
+          },
+          {
+            "name": "draw",
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "duration": 7
+          }
+        ]
+      },
+      {
+        "start": 523.6000000238419,
+        "duration": 61,
+        "blocking": 6.5,
+        "scripts": [
+          {
+            "name": "",
+            "url": "http://127.0.0.1:4173/js/particle-panel.js",
+            "duration": 20.30000001192093
+          },
+          {
+            "name": "draw",
+            "url": "http://127.0.0.1:4173/js/atmosphere.js",
+            "duration": 29.80000001192093
+          }
+        ]
+      }
+    ],
+    "durationMs": 5500,
+    "coreReady": "unprepared",
+    "clock": "capped-delta"
+  },
+  "desktop": {
+    "supported": [
+      "element",
+      "event",
+      "first-input",
+      "interaction-contentful-paint",
+      "largest-contentful-paint",
+      "layout-shift",
+      "long-animation-frame",
+      "longtask",
+      "mark",
+      "measure",
+      "navigation",
+      "paint",
+      "resource",
+      "soft-navigation",
+      "visibility-state"
+    ],
+    "preparationMs": 466,
+    "introLongTasks": [],
+    "preparationLongTasks": [
+      {
+        "start": 307.4000000357628,
+        "duration": 151,
+        "blocking": 0,
+        "scripts": []
+      },
+      {
+        "start": 472.5,
+        "duration": 90,
+        "blocking": 0,
+        "scripts": []
+      }
+    ],
+    "longFrames": [],
+    "durationMs": 5500,
+    "coreReady": "ready",
+    "clock": "visible-wall-time"
+  },
+  "mobileViewport": {
+    "supported": [
+      "element",
+      "event",
+      "first-input",
+      "interaction-contentful-paint",
+      "largest-contentful-paint",
+      "layout-shift",
+      "long-animation-frame",
+      "longtask",
+      "mark",
+      "measure",
+      "navigation",
+      "paint",
+      "resource",
+      "soft-navigation",
+      "visibility-state"
+    ],
+    "preparationMs": 245,
+    "introLongTasks": [],
+    "preparationLongTasks": [
+      {
+        "start": 191.70000004768372,
+        "duration": 64,
+        "blocking": 0,
+        "scripts": []
+      },
+      {
+        "start": 263.5,
+        "duration": 57,
+        "blocking": 0,
+        "scripts": []
+      }
+    ],
+    "longFrames": [],
+    "durationMs": 5500,
+    "coreReady": "ready",
+    "clock": "visible-wall-time"
+  },
+  "poses": [
+    {
+      "animationTime": "58.00",
+      "beamDustCount": "800",
+      "beamFarRadius": "3.687",
+      "beamMaterial": "CylinderGeometry",
+      "beamNearEnd": "superior",
+      "beamNearRadius": "5.219",
+      "beamWorldLength": "1.016800",
+      "beamWorldRadius": "0.006724",
+      "bloom": "postprocess-after-depth",
+      "camera": "PerspectiveCamera",
+      "captureTime": "58",
+      "clock": "visible-wall-time",
+      "coreDepth": "0",
+      "coreScreenCenter": "0.37159375,0.055",
+      "engine": "three.js r186",
+      "fov": "48",
+      "gapCount": "11",
+      "gpuReady": "ready",
+      "introStartedAt": "539.5",
+      "motionEnergy": "0",
+      "motionRate": "1",
+      "occlusion": "depth-buffer-normal-alpha",
+      "orientation": "desktop",
+      "particleCount": "6500",
+      "particleEngine": "three-mesh-gpu",
+      "particlePhase": "orbiting",
+      "particleShape": "sphere-impostor",
+      "pixelRatio": "0.80",
+      "ringCount": "5689",
+      "ringRadiusA": "0.3",
+      "ringRadiusB": "0.3"
+    },
+    {
+      "animationTime": "63.00",
+      "beamDustCount": "800",
+      "beamFarRadius": "4.236",
+      "beamMaterial": "CylinderGeometry",
+      "beamNearEnd": "inferior",
+      "beamNearRadius": "4.411",
+      "beamWorldLength": "1.016800",
+      "beamWorldRadius": "0.006724",
+      "bloom": "postprocess-after-depth",
+      "camera": "PerspectiveCamera",
+      "captureTime": "63",
+      "clock": "visible-wall-time",
+      "coreDepth": "0",
+      "coreScreenCenter": "0.37159375,0.055",
+      "engine": "three.js r186",
+      "fov": "48",
+      "gapCount": "11",
+      "gpuReady": "ready",
+      "introStartedAt": "528.9000000357628",
+      "motionEnergy": "0",
+      "motionRate": "1",
+      "occlusion": "depth-buffer-normal-alpha",
+      "orientation": "desktop",
+      "particleCount": "6500",
+      "particleEngine": "three-mesh-gpu",
+      "particlePhase": "orbiting",
+      "particleShape": "sphere-impostor",
+      "pixelRatio": "0.80",
+      "ringCount": "5689",
+      "ringRadiusA": "0.3",
+      "ringRadiusB": "0.3"
+    },
+    {
+      "animationTime": "75.00",
+      "beamDustCount": "800",
+      "beamFarRadius": "3.272",
+      "beamMaterial": "CylinderGeometry",
+      "beamNearEnd": "inferior",
+      "beamNearRadius": "6.365",
+      "beamWorldLength": "1.016800",
+      "beamWorldRadius": "0.006724",
+      "bloom": "postprocess-after-depth",
+      "camera": "PerspectiveCamera",
+      "captureTime": "75",
+      "clock": "visible-wall-time",
+      "coreDepth": "0",
+      "coreScreenCenter": "0.37159375,0.055",
+      "engine": "three.js r186",
+      "fov": "48",
+      "gapCount": "11",
+      "gpuReady": "ready",
+      "introStartedAt": "653.8000000119209",
+      "motionEnergy": "0",
+      "motionRate": "1",
+      "occlusion": "depth-buffer-normal-alpha",
+      "orientation": "desktop",
+      "particleCount": "6500",
+      "particleEngine": "three-mesh-gpu",
+      "particlePhase": "orbiting",
+      "particleShape": "sphere-impostor",
+      "pixelRatio": "0.80",
+      "ringCount": "5689",
+      "ringRadiusA": "0.3",
+      "ringRadiusB": "0.3"
+    }
+  ],
+  "scroll": {
+    "before": {
+      "core": {
+        "animationTime": "109.74",
+        "beamDustCount": "800",
+        "beamFarRadius": "4.218",
+        "beamMaterial": "CylinderGeometry",
+        "beamNearEnd": "superior",
+        "beamNearRadius": "4.430",
+        "beamWorldLength": "1.016800",
+        "beamWorldRadius": "0.006724",
+        "bloom": "postprocess-after-depth",
+        "camera": "PerspectiveCamera",
+        "clock": "visible-wall-time",
+        "coreDepth": "0",
+        "coreScreenCenter": "0.37159375,0.055",
+        "engine": "three.js r186",
+        "fov": "48",
+        "fps": "53.6",
+        "gapCount": "11",
+        "gpuReady": "ready",
+        "introStartedAt": "523.6999999880791",
+        "motionEnergy": "8.416007946562395e-34",
+        "motionRate": "1",
+        "occlusion": "depth-buffer-normal-alpha",
+        "orientation": "desktop",
+        "particleCount": "6500",
+        "particleEngine": "three-mesh-gpu",
+        "particlePhase": "orbiting",
+        "particleShape": "sphere-impostor",
+        "pixelRatio": "0.80",
+        "ringCount": "5689",
+        "ringRadiusA": "0.3",
+        "ringRadiusB": "0.3"
+      },
+      "scrollY": 800
+    },
+    "during": {
+      "core": {
+        "animationTime": "110.39",
+        "beamDustCount": "800",
+        "beamFarRadius": "4.190",
+        "beamMaterial": "CylinderGeometry",
+        "beamNearEnd": "inferior",
+        "beamNearRadius": "4.461",
+        "beamWorldLength": "1.016800",
+        "beamWorldRadius": "0.006724",
+        "bloom": "postprocess-after-depth",
+        "camera": "PerspectiveCamera",
+        "clock": "visible-wall-time",
+        "coreDepth": "0",
+        "coreScreenCenter": "0.37159375,0.055",
+        "engine": "three.js r186",
+        "fov": "48",
+        "fps": "52.8",
+        "gapCount": "11",
+        "gpuReady": "ready",
+        "introStartedAt": "523.6999999880791",
+        "motionEnergy": "0.4573576930113993",
+        "motionRate": "2.1891300018296382",
+        "occlusion": "depth-buffer-normal-alpha",
+        "orientation": "desktop",
+        "particleCount": "6500",
+        "particleEngine": "three-mesh-gpu",
+        "particlePhase": "orbiting",
+        "particleShape": "sphere-impostor",
+        "pixelRatio": "0.80",
+        "ringCount": "5689",
+        "ringRadiusA": "0.3",
+        "ringRadiusB": "0.3"
+      },
+      "scrollY": 400
+    },
+    "after": {
+      "core": {
+        "animationTime": "124.35",
+        "beamDustCount": "800",
+        "beamFarRadius": "3.355",
+        "beamMaterial": "CylinderGeometry",
+        "beamNearEnd": "inferior",
+        "beamNearRadius": "6.070",
+        "beamWorldLength": "1.016800",
+        "beamWorldRadius": "0.006724",
+        "bloom": "postprocess-after-depth",
+        "camera": "PerspectiveCamera",
+        "clock": "visible-wall-time",
+        "coreDepth": "0",
+        "coreScreenCenter": "0.37159375,0.055",
+        "engine": "three.js r186",
+        "fov": "48",
+        "fps": "51.7",
+        "gapCount": "11",
+        "gpuReady": "ready",
+        "introStartedAt": "523.6999999880791",
+        "motionEnergy": "0.000006481170078823929",
+        "motionRate": "1.000016851042205",
+        "occlusion": "depth-buffer-normal-alpha",
+        "orientation": "desktop",
+        "particleCount": "6500",
+        "particleEngine": "three-mesh-gpu",
+        "particlePhase": "orbiting",
+        "particleShape": "sphere-impostor",
+        "pixelRatio": "0.80",
+        "ringCount": "5689",
+        "ringRadiusA": "0.3",
+        "ringRadiusB": "0.3"
+      },
+      "scrollY": 400
+    }
+  }
+}

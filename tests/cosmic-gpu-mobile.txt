@@ -1,0 +1,76 @@
+✓ WebGL2 y framebuffer elegidos correctamente
+✓ Shaders, pases y dos slots precalentados
+✓ Posiciones finitas en 5%
+✓ Posiciones finitas en 14%
+✓ Posiciones finitas en 55%
+✓ Posiciones finitas en 76%
+✓ Posiciones finitas en 100%
+✓ Posiciones finitas en 76%
+✓ Posiciones finitas en 55%
+✓ Posiciones finitas en 14%
+✓ Posiciones finitas en 5%
+✓ Mismos buffers e IDs en avance y retroceso, sin reasignaciones
+✓ Singularidad reversible, sin reemplazar el sistema
+✓ De singularidad compacta a expansión espacial
+✓ Proxy invisible y oclusión real
+✓ Versión A precargada, cantidad estable
+✓ A · 50 · PerspectiveCamera real de 48°
+✓ A · 50 · Cilindro invisible: solo profundidad
+✓ A · 50 · Esferas con alfa normal y profundidad
+✓ A · 50 · Luz visible en el cruce delantero (21 muestras; proxy 21, luz 255, punto 135,332)
+✓ A · 50 · La banda delantera cubre la luz A (7/21)
+✓ A · 50 · Luz visible en el cruce trasero (21 muestras; proxy 21, luz 255, punto 135,449)
+✓ A · 50 · La banda trasera falla el depth test (0 fugas azules)
+✓ A · 50 · Perspectiva 1.22×; proxy rasterizado 1.00 / 1.00 px (cuantización subpíxel)
+✓ A · 50 · Sin errores WebGL
+✓ A · 58 · PerspectiveCamera real de 48°
+✓ A · 58 · Cilindro invisible: solo profundidad
+✓ A · 58 · Esferas con alfa normal y profundidad
+✓ A · 58 · Luz visible en el cruce delantero (15 muestras; proxy 15, luz 255, punto 103,354)
+✓ A · 58 · La banda delantera cubre la luz A (7/15)
+✓ A · 58 · Luz visible en el cruce trasero (17 muestras; proxy 17, luz 255, punto 163,426)
+✓ A · 58 · La banda trasera falla el depth test (0 fugas azules)
+✓ A · 58 · Perspectiva 1.11×; proxy rasterizado 1.50 / 0.25 px (cuantización subpíxel)
+✓ A · 58 · Sin errores WebGL
+✓ A · 75 · PerspectiveCamera real de 48°
+✓ A · 75 · Cilindro invisible: solo profundidad
+✓ A · 75 · Esferas con alfa normal y profundidad
+✓ A · 75 · Luz visible en el cruce delantero (21 muestras; proxy 21, luz 255, punto 135,412)
+✓ A · 75 · La banda delantera cubre la luz A (7/21)
+✓ A · 75 · Luz visible en el cruce trasero (21 muestras; proxy 21, luz 255, punto 135,376)
+✓ A · 75 · La banda trasera falla el depth test (0 fugas azules)
+✓ A · 75 · Perspectiva 1.22×; proxy rasterizado 1.00 / 1.00 px (cuantización subpíxel)
+✓ A · 75 · Sin errores WebGL
+✓ Versión B precargada, cantidad estable
+✓ B · 50 · PerspectiveCamera real de 48°
+✓ B · 50 · Cilindro invisible: solo profundidad
+✓ B · 50 · Esferas con alfa normal y profundidad
+✓ B · 50 · Luz visible en el cruce delantero (38 muestras; proxy 42, luz 255, punto 135,332)
+✓ B · 50 · La banda delantera cubre la luz B (12/38)
+✓ B · 50 · Luz visible en el cruce trasero (42 muestras; proxy 42, luz 255, punto 135,449)
+✓ B · 50 · La banda trasera falla el depth test (0 fugas azules)
+✓ B · 50 · Perspectiva 1.22×; proxy rasterizado 2.00 / 2.00 px (cuantización subpíxel)
+✓ B · 50 · Sin errores WebGL
+✓ B · 58 · PerspectiveCamera real de 48°
+✓ B · 58 · Cilindro invisible: solo profundidad
+✓ B · 58 · Esferas con alfa normal y profundidad
+✓ B · 58 · Luz visible en el cruce delantero (32 muestras; proxy 33, luz 255, punto 103,354)
+✓ B · 58 · La banda delantera cubre la luz B (14/32)
+✓ B · 58 · Luz visible en el cruce trasero (32 muestras; proxy 35, luz 255, punto 163,426)
+✓ B · 58 · La banda trasera falla el depth test (0 fugas azules)
+✓ B · 58 · Perspectiva 1.11×; proxy rasterizado 2.75 / 2.50 px (cuantización subpíxel)
+✓ B · 58 · Sin errores WebGL
+✓ B · 75 · PerspectiveCamera real de 48°
+✓ B · 75 · Cilindro invisible: solo profundidad
+✓ B · 75 · Esferas con alfa normal y profundidad
+✓ B · 75 · Luz visible en el cruce delantero (42 muestras; proxy 42, luz 255, punto 135,412)
+✓ B · 75 · La banda delantera cubre la luz B (12/42)
+✓ B · 75 · Luz visible en el cruce trasero (40 muestras; proxy 42, luz 255, punto 135,376)
+✓ B · 75 · La banda trasera falla el depth test (0 fugas azules)
+✓ B · 75 · Perspectiva 1.22×; proxy rasterizado 2.00 / 2.00 px (cuantización subpíxel)
+✓ B · 75 · Sin errores WebGL
+✓ Cambiar A/B tampoco reasigna buffers
+✓ Resize 390×844 sin errores
+✓ Resize 412×915 sin errores
+✓ Resize 1280×800 sin errores
+✓ Contexto exclusivo liberado al desmontar

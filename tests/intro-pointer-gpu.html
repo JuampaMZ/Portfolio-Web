@@ -1,0 +1,19 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Puntero durante Big Bang · GPU</title><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml"><style>body{background:#04080d;color:#eef5f0;font:14px system-ui}pre{white-space:pre-wrap}canvas{width:800px;height:500px}</style><h1>Resorte independiente del progreso</h1><button>Verificar puntero en todas las fases</button><pre>Listo.</pre><canvas></canvas><script type="module">
+import * as THREE from '../assets/three-runtime.js';
+import {createMeshCore} from '../js/core-mesh-renderer.js';
+const canvas=document.querySelector('canvas'),out=document.querySelector('pre');
+document.querySelector('button').onclick=async()=>{let core;const rows=[],assert=(ok,text)=>{if(!ok)throw Error(text);rows.push('✓ '+text);};try{
+ core=createMeshCore(canvas,{inspection:true});core.resize(800,500);await core.prepare();const {renderer,camera}=core.inspect,gl=renderer.getContext(),empty=new Float32Array(32);
+ const read=buffer=>{const a=new Float32Array(256*3);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.getBufferSubData(gl.ARRAY_BUFFER,0,a);gl.bindBuffer(gl.ARRAY_BUFFER,null);renderer.resetState();return a;};
+ const energy=()=>{const state=core.inspect.state,p=read(state.position),anchor=read(state.anchor);return p.reduce((sum,v,i)=>sum+(v-anchor[i])**2,0);};
+ for(const phase of [.2,.45,.76,.95,1]){
+  const drive={bigBang:phase,phase:58,rate:1,orbitTime:0};core.seek(58,0,empty,[0,0],drive);const positions=read(core.inspect.state.position);let point;
+  for(let i=0;i<positions.length;i+=3){const q=new THREE.Vector3(...positions.slice(i,i+3)).project(camera);if(Math.abs(q.x)<.75&&Math.abs(q.y)<.75){point=q;break;}}
+  assert(!!point,'Partículas visibles en '+Math.round(phase*100)+'%');const trail=new Float32Array(32);trail.set([point.x*camera.aspect/2,point.y/2,1,1]);
+  for(let f=1;f<=30;f++)core.draw(58+f/60,0,trail,[0,0],drive);const disturbed=energy();assert(disturbed>1e-6,'Repulsión 3D activa en '+Math.round(phase*100)+'%');
+  const moved={...drive,bigBang:Math.max(.1,phase-.04)};core.draw(58+31/60,0,empty,[0,0],moved);assert(energy()>disturbed*.2,'El scroll inverso no borra la perturbación');
+  for(let f=32;f<=210;f++)core.draw(58+f/60,0,empty,[0,0],moved);assert(energy()<disturbed*.005,'Regreso amortiguado, sin salto a la trayectoria');
+ }
+ assert(gl.getError()===0,'Sin errores WebGL');out.dataset.status='passed';
+ }catch(e){rows.push('✗ '+e.message);out.dataset.status='failed';console.error(e);}finally{core?.dispose();out.textContent=rows.join('\n');}};
+</script></html>

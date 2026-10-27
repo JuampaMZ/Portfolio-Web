@@ -1,0 +1,289 @@
+{
+  "baseline": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "quality": "desktop-hdr",
+    "hdr": "true",
+    "variant": "A",
+    "particles": "10126",
+    "durationMs": 10413.999999976159,
+    "longTasks": [],
+    "longFrames": [
+      {
+        "start": 6475.899999976158,
+        "duration": 50.800000071525574,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 20
+          },
+          {
+            "url": "http://127.0.0.1:4173/tests/cosmic-profiler.js",
+            "name": "run",
+            "duration": 7.700000047683716
+          }
+        ]
+      },
+      {
+        "start": 6860.300000071526,
+        "duration": 88,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/atmosphere.js",
+            "name": "draw",
+            "duration": 6.600000023841858
+          },
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 6.600000023841858
+          }
+        ]
+      },
+      {
+        "start": 6989.300000071526,
+        "duration": 66.29999995231628,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "",
+            "duration": 6.399999976158142
+          }
+        ]
+      },
+      {
+        "start": 7057.100000023842,
+        "duration": 94.70000004768372,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/tests/cosmic-profiler.js",
+            "name": "run",
+            "duration": 15.5
+          }
+        ]
+      },
+      {
+        "start": 7160.600000023842,
+        "duration": 81.60000002384186,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/atmosphere.js",
+            "name": "draw",
+            "duration": 10.300000071525574
+          },
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 6.199999928474426
+          }
+        ]
+      },
+      {
+        "start": 7252.800000071526,
+        "duration": 149,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 5.699999928474426
+          }
+        ]
+      },
+      {
+        "start": 7404.200000047684,
+        "duration": 161.10000002384186,
+        "blocking": 0,
+        "scripts": []
+      },
+      {
+        "start": 7632.5,
+        "duration": 50.60000002384186,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/atmosphere.js",
+            "name": "draw",
+            "duration": 6.299999952316284
+          },
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 15.699999928474426
+          }
+        ]
+      }
+    ],
+    "meanFrameMs": 22.299785867186635,
+    "phases": [
+      {
+        "t": -0.01190000002384204,
+        "phase": "singularity",
+        "progress": "0.00000",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 0.5541999999761583,
+        "phase": "explosion",
+        "progress": "0.10386",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 1.2870999999761579,
+        "phase": "expansion",
+        "progress": "0.30422",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 2.3703999999761582,
+        "phase": "absorption",
+        "progress": "0.60496",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 3.435399999976158,
+        "phase": "formed",
+        "progress": "0.90051",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 5.750599999976159,
+        "phase": "absorption",
+        "progress": "0.89916",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 6.849299999976158,
+        "phase": "expansion",
+        "progress": "0.59634",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 7.916399999976158,
+        "phase": "explosion",
+        "progress": "0.29928",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 8.647599999976158,
+        "phase": "singularity",
+        "progress": "0.09590",
+        "engine": "three-mesh-gpu"
+      }
+    ],
+    "finalProgress": "0.00000",
+    "errors": [],
+    "browser": "Edge headless, local GPU; not the in-app browser"
+  },
+  "after": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "quality": "desktop-hdr",
+    "hdr": "true",
+    "variant": "A",
+    "particles": "10126",
+    "durationMs": 10403.499999904632,
+    "longTasks": [],
+    "longFrames": [
+      {
+        "start": 5003.900000095367,
+        "duration": 73.5,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/js/scroll-story.js",
+            "name": "draw",
+            "duration": 6.800000071525574
+          },
+          {
+            "url": "http://127.0.0.1:4173/tests/cosmic-profiler.js",
+            "name": "run",
+            "duration": 5.799999952316284
+          }
+        ]
+      },
+      {
+        "start": 5260.600000023842,
+        "duration": 62.300000071525574,
+        "blocking": 0,
+        "scripts": [
+          {
+            "url": "http://127.0.0.1:4173/tests/cosmic-profiler.js",
+            "name": "run",
+            "duration": 5.899999976158142
+          }
+        ]
+      }
+    ],
+    "meanFrameMs": 16.861426255923227,
+    "phases": [
+      {
+        "t": -0.004900000095367432,
+        "phase": "singularity",
+        "progress": "0.00000",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 0.4615999999046326,
+        "phase": "explosion",
+        "progress": "0.10095",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 1.1941999999046324,
+        "phase": "expansion",
+        "progress": "0.30435",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 2.2601999999046325,
+        "phase": "absorption",
+        "progress": "0.60039",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 3.342499999904632,
+        "phase": "formed",
+        "progress": "0.90116",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 5.6738999999046325,
+        "phase": "absorption",
+        "progress": "0.89567",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 6.739699999904633,
+        "phase": "expansion",
+        "progress": "0.59959",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 7.822199999904633,
+        "phase": "explosion",
+        "progress": "0.29896",
+        "engine": "three-mesh-gpu"
+      },
+      {
+        "t": 8.538199999904633,
+        "phase": "singularity",
+        "progress": "0.09999",
+        "engine": "three-mesh-gpu"
+      }
+    ],
+    "finalProgress": "0.00000",
+    "errors": [],
+    "browser": "Edge headless, local GPU; not the in-app browser"
+  }
+}
