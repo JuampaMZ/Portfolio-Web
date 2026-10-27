@@ -8,7 +8,7 @@ Node.js 20+: `npm install`, `npm run dev` (http://127.0.0.1:4173), `npm run chec
 
 El build empaqueta Three.js/addons y copia una lista explícita a `dist/`. No publica pruebas, perfiles, node_modules ni lil-gui. `IS_DEVELOPMENT=false` evita cargar el panel en producción. Vercel CLI publica en https://juan-pablo-craft-portfolio.vercel.app/, equipo `juans-projects-079dba21`. El repositorio no despliega automáticamente al hacer push.
 
-Checkpoint antes de esta iteración: **b7b4984**. La versión anterior del sitio permanece recuperable en ese commit.
+La versión anterior a este pulido permanece recuperable en **357a4d8**; el checkpoint previo al Big Bang es **b7b4984**.
 
 ## Diagnóstico móvil y respaldo
 
@@ -18,12 +18,12 @@ La simulación usa transform feedback, no texturas float de posición ni MRT. Si
 
 | Perfil | Núcleo + fotones precargados | Presupuesto de píxeles | Brillo |
 |---|---:|---:|---|
-| Escritorio HDR | 7.526 + 2.600 | 650.000 | Bloom reducido |
-| Móvil HDR | 1.800 + 1.200 | 220.000 | Bloom reducido |
+| Escritorio HDR | 7.526 + 2.600 | 1.200.000 | Bloom reducido |
+| Móvil HDR | 1.800 + 1.200 | 350.000 | Bloom reducido |
 | Móvil compatible | 1.000 + 650 | 150.000 | RGBA8 y glow analítico, sin targets float de bloom |
 | Respaldo Canvas2D | Hasta 620 IDs | 160.000 | Núcleo procedural simplificado |
 
-El DPR móvil nunca supera 1,2 y además queda limitado por el presupuesto y las dimensiones máximas de la GPU. Galaxia y aurora reducen sus cantidades/resolución en móvil. Las variaciones pequeñas de altura de la barra del navegador no reconstruyen la simulación.
+El DPR móvil nunca supera 1,2 y además queda limitado por el presupuesto y las dimensiones máximas de la GPU. Galaxia y aurora reducen sus cantidades/resolución en móvil. La aurora ahora usa un framebuffer RGBA8 pequeño dentro del contexto de las estrellas traseras: son tres contextos WebGL, en lugar de cuatro. Las variaciones pequeñas de altura de la barra del navegador no reconstruyen la simulación.
 
 Si no hay WebGL2, precisión o framebuffer compatibles, se muestra un núcleo Canvas2D con las dos C, rayo y secuencia de formación. Es un respaldo deliberadamente más simple, con ordenación aproximada por profundidad; la ruta principal conserva oclusión GPU real. Un último respaldo CSS protege incluso la carga fallida de módulos, sin imágenes ni logo grande.
 
@@ -43,7 +43,7 @@ La sección mide 290vh, con un escenario sticky de altura estable. El scroll rec
 - 60–90%: se enciende el rayo y las mismas partículas se atraen en espiral hacia las C y el remolino axial.
 - 90–100%: núcleo completo, texto escalonado con fade y desenfoque leve; transición a la composición del hero.
 
-`big-bang.js` proporciona las trayectorias a los shaders de simulación y dibujo. Los IDs y los dos slots de buffers GPU se mantienen durante toda la secuencia y al retroceder; la transición final conserva velocidad y entra gradualmente al resorte. Las partículas adicionales del rayo B también participan del Big Bang. En A permanecen precargadas y se desvanecen al completar la formación.
+`big-bang.js` proporciona las trayectorias a los shaders de simulación y dibujo. Los IDs y los dos slots de buffers GPU se mantienen durante toda la secuencia y al retroceder; cada slot incluye posición, velocidad de perturbación y ancla analítica. El resorte conserva su desplazamiento al avanzar o retroceder cualquier fase, sin mezclar la velocidad de la trayectoria con la fuerza del puntero. Las partículas adicionales del rayo B también participan del Big Bang. En A permanecen precargadas y se desvanecen al completar la formación.
 
 Antes de mostrar la singularidad se esperan fuentes, se preparan glifos, shaders (`compile`/`compileAsync`), ambos slots de buffers, todos los pases y un fence GPU asíncrono. No hay creación de geometrías ni buffers por cambio de fase o de versión A/B. Se anima autónomamente el pulso, los cielos y el núcleo; solo se pausa el render al ocultarse la pestaña.
 
@@ -57,7 +57,7 @@ A evalúa por píxel la distancia entre el rayo de cámara y el eje finito del h
 
 B usa miles de puntos pequeños precargados, con velocidades axiales diferentes, densidad gaussiana hacia el eje y algunos escapes hacia el remolino. La emisión HDR genera un filamento continuo a distancia y detalle puntual de cerca. Ambas versiones se desvanecen en el último 18% de cada extremo y aparecen durante la absorción.
 
-La cámara es PerspectiveCamera de 48°, a distancia fija 1,12. Un cilindro invisible (`colorWrite:false`, `depthWrite:true`) conserva la profundidad del eje. La luz se compone primero, después su proxy, y las esferas de anillo/remolino prueban el mismo depth buffer con alfa normal. Las superficies esféricas escriben su profundidad mediante gl_FragDepth. No hay máscara de render target ni clasificación manual de mitades en producción. El bloom acompaña la composición visible. En RGBA8 la conversión a sRGB respeta el alfa premultiplicado para evitar un borde artificial en el halo.
+La cámara es PerspectiveCamera de 48°, a distancia fija 1,12. Un cilindro invisible (`colorWrite:false`, `depthWrite:true`) conserva la profundidad del eje. La luz se compone primero, después su proxy, y las esferas de anillo/remolino prueban el mismo depth buffer con alfa normal. Las superficies esféricas escriben su profundidad mediante gl_FragDepth. No hay máscara de render target ni clasificación manual de mitades en producción. El bloom acompaña la composición visible del núcleo formado; durante las fases iniciales se usa el glow analítico y el bloom entra gradualmente junto al texto. Su resolución se acota independientemente del canvas principal. En RGBA8 la conversión a sRGB respeta el alfa premultiplicado para evitar un borde artificial en el halo.
 
 Los radios de las C aumentan de 0,30 a 0,354 solo en escritorio; aumenta proporcionalmente su cantidad de partículas para conservar densidad. El grosor, la textura esférica, el encastre, el remolino sutil y las fórmulas de movimiento se conservan. El alcance del rayo se adapta una vez al perfil de escritorio para mantener ambos cruces con los anillos mayores. Durante el ciclo, radios, largo, grosor y centro Z=0 permanecen constantes: solo cambia la orientación, con retrasos independientes y acotados para las C. La perspectiva cambia el tamaño relativo de los extremos, no la escala de todo el grupo.
 
@@ -65,7 +65,7 @@ Tras la formación, el scroll acelera el ciclo hasta 3,6× y añade hasta 12° d
 
 ## Verificación de esta iteración
 
-`npm run check`, `npm test` (28 pruebas), `npm run build`. Los tests cubren perfiles, formación reversible, encastre, dimensión constante, cámara, color, puntero pasivo y encuadre móvil de las C y extremos del rayo en 48 poses con impulso máximo de scroll.
+`npm run check`, `npm test` (31 pruebas), `npm run build`. Los tests cubren perfiles, formación reversible, encastre, dimensión constante, cámara, color, puntero pasivo y encuadre móvil de las C y extremos del rayo en 48 poses con impulso máximo de scroll.
 
 - `tests/cosmic-gpu.html`: posiciones finitas en cinco fases y al regresar; mismos IDs/buffers, sin reasignaciones; A/B precargados; oclusión real en 50/58/75 s; resize y liberación del contexto. Pasó en escritorio HDR y viewport móvil con RGBA8 forzado. Los readbacks y colores rojo/azul existen solo en pruebas.
 - `tests/colors-preview.html`: salida sRGB, blanco de las esferas, ciclo OKLab y 54 verificaciones de los dos cruces en tres poses; pasó en escritorio y móvil.
@@ -86,6 +86,34 @@ Los JSON `cosmic-*-profile.json` conservan las mediciones; escritorio incluye la
 
 ## Recursos y contenido conservado
 
-Se liberan buffers TF, geometrías compartidas, materiales, proxy, programas, VAO, composer, targets, pases de bloom, fences, listeners, observadores, panel y RAF. La ruta GPU no tiene bucles JS por partícula por frame; solo el respaldo Canvas2D usa un presupuesto CPU acotado.
+Se liberan los tres buffers TF de cada slot, framebuffer/textura de aurora compartida, geometrías compartidas, materiales, proxy, programas, VAO, composer, targets, pases de bloom, fences, listeners, observadores, panel y RAF. La ruta GPU no tiene bucles JS por partícula por frame; solo el respaldo Canvas2D usa un presupuesto CPU acotado.
 
 Se mantienen la galaxia frontal/de fondo, aurora procedural, interacción mouse/touch, encabezado, contacto, perfil y prisma con Craft Studio, Animanía y Showroom 3D.
+
+## Pulido de fluidez y partículas — 27 de octubre de 2026
+
+La comparación encontró eventos de rueda grandes/irregulares y trabajo de render/layout innecesario para algunas fases. La referencia local tuvo cero Long Tasks, pero ocho Long Animation Frames y 22,30 ms de intervalo medio.
+
+- `intro-scroll.js` interpola la rueda solo dentro de la intro, con puntero fino/hover. Usa tiempo real, acumula distancia, elimina viaje pendiente al invertir la rueda y cancela al usar teclado, enlaces o puntero. No interviene en touch, zoom, desplazamiento horizontal, menú o controles. El progreso y la escena usan el mismo RAF.
+- El escenario usa medidas cacheadas de layout; no lee dimensiones de la página en cada cuadro. El prisma no consulta su posición durante la intro fuera de pantalla. Se observan los textos visibles para las máscaras de legibilidad.
+- Aurora y estrellas traseras comparten contexto; la aurora conserva su target pequeño y se compone antes de las estrellas. Los fondos lentos se actualizan a 30 Hz en escritorio, manteniendo su reloj continuo; el núcleo y la rueda siguen a la frecuencia del display. En móvil se mantiene la frecuencia previa.
+- Se omite el cálculo orbital cuando todavía no hace falta y se usan puntos sencillos durante la expansión sin rayo. Las esferas y su profundidad real se conservan al formar el núcleo. El bloom no ejecuta sus pases costosos en fases con glow analítico.
+- Radios de esfera: 0,0038 → 0,0027 en escritorio y 0,0028 → 0,0020 en móvil, aproximadamente 29% menos. Desenfoque 0,04/0,025, borde más definido, más resolución del canvas y bloom separado con umbral 2,1 para no engordar los puntos blancos.
+- El puntero usa un desplazamiento y velocidad independientes del ancla analítica, enteramente en GPU. Esquiva y recupera durante todas las fases visibles; el cambio de progreso no borra la perturbación. Conserva alfa normal, sphere impostors y gl_FragDepth, sin cambiar el proxy del rayo ni el encastre.
+
+Configuración: `desktopWheelSmoothing=.12`, `desktopProgressSmoothing=.09`, `desktopBackgroundFps=30`, radios/DOF y presupuestos en `particle-config.js`. Los tiempos de rueda/progreso también se exponen en lil-gui.
+
+Comparación en el mismo Edge headless local, 1440×900, recorrido de 10,4 s:
+
+| Medición | Intervalo medio | FPS calculados | Long Tasks | Long Animation Frames |
+|---|---:|---:|---:|---:|
+| Estado 357a4d8 | 22,30 ms | 44,84 | 0 | 8 (máximo 161 ms) |
+| Pulido | 16,86 ms | 59,31 | 0 | 2 (62/74 ms) |
+
+Los perfiles completos están en `tests/scroll-polish-performance.json`. Son mediciones locales, no una garantía para todo hardware; se conservan los dos cuadros aislados del perfil final.
+
+`tests/intro-pointer-gpu.html` verificó repulsión, conservación al retroceder y retorno amortiguado en 20/45/76/95/100%. Pasaron cosmic-gpu, sphere-gpu y colors-preview: cruces A/B, profundidad curva y liberación. `tests/wheel-scroll.test.mjs` verifica continuidad temporal, acumulación, inversión y cancelación.
+
+`tests/scroll-polish-results.json` conserva los tests GPU, rueda real hasta 99,8% y regreso a 71,3%, ancla de contacto y dos perfiles con viewport/touch emulados y DPR 2: iPhone 390×844 HDR y Android 412×915 RGBA8, ambos 16,66 ms, sin Long Tasks ni Long Animation Frames. No equivale a probar Safari o teléfonos físicos.
+
+La primera ronda del harness encontró un favicon ausente en páginas de prueba; se agregó su enlace explícito. `tests/scroll-polish-smoke.json` confirma consola limpia, inversión rápida de rueda (467 → 413 px) y recuperación del fondo compartido y del núcleo. Los resultados históricos anteriores permanecen identificados por su iteración.

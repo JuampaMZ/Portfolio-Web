@@ -6,13 +6,13 @@ export const sphereVertex=`
 in vec3 velocity;
 uniform float uSphereRadius,uViewportHeight,uDpr,uLodPixels,uDofStrength,uFocusRange,uFocusDistance,uDebug,uSingleRing,uTime,uRingOpacity;
 uniform vec3 uParticleColor,uDustColor,uBeamViewA,uBeamViewB;
-flat out vec3 vCenter,vLight,vHalf,vBase;flat out float vRadius,vOpacity,vDetail,vBlur,vKind,vActivity;
+flat out vec3 vCenter,vLight,vHalf,vBase;flat out float vRadius,vOpacity,vDetail,vBlur,vKind,vActivity,vFormation;
 `+gpuMath+cosmicUniforms+orbitalSource+cosmicSource+`
 void main(){
  float id=float(gl_VertexID),seed=random(id+1.);bool band=inBand(id),gap=inGap(id),photon=inBeam(id);
  vec4 view=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*view;vCenter=view.xyz;
  if(uSingleRing>.5&&!photon&&(!band||secondRing(id)))gl_Position=vec4(3.,3.,3.,1.);
- float formed=uStoryActive>.5?bangSmooth(uPhases.z,uPhases.w,uBigBang):1.;
+ float formed=uStoryActive>.5?bangSmooth(uPhases.z,uPhases.w,uBigBang):1.;vFormation=formed;
  vRadius=uSphereRadius*(.75+seed*.5)*(band?1.:(gap?.32:.28));if(photon)vRadius=uSphereRadius*(.22+seed*.16);
  vRadius=mix(uSphereRadius*(.28+seed*.35),vRadius,formed);
  float diameter=vRadius*uViewportHeight*projectionMatrix[1][1]/max(.05,-view.z);
@@ -33,11 +33,12 @@ void main(){
 
 export const sphereFragment=`
 precision highp float;
-flat in vec3 vCenter,vLight,vHalf,vBase;flat in float vRadius,vOpacity,vDetail,vBlur,vKind,vActivity;
+flat in vec3 vCenter,vLight,vHalf,vBase;flat in float vRadius,vOpacity,vDetail,vBlur,vKind,vActivity,vFormation;
 uniform mat4 uProjection,uInverseProjection;uniform vec2 uResolution;
 uniform vec3 uBeamLightColor,uBeamViewA,uBeamViewB;uniform float uDebug,uDiffuse,uAmbient,uSpecular,uShininess,uRim,uRimPower,uActivityBrightness;
 out vec4 outColor;
 void main(){
+ if(vFormation<.001){vec2 p=gl_PointCoord*2.-1.;float r=dot(p,p);if(r>1.)discard;float aa=max(fwidth(r),.04),edge=1.-smoothstep(1.-aa,1.,r);gl_FragDepth=gl_FragCoord.z;outColor=vec4(vBase,edge*vOpacity);return;}
  if(vKind>2.5){vec2 p=gl_PointCoord*2.-1.;float r=dot(p,p);if(r>1.)discard;float alpha=exp(-r*3.2)*vOpacity;gl_FragDepth=gl_FragCoord.z;outColor=vec4(vBase*(3.8+vActivity*.3),alpha);return;}
  vec2 ndc=gl_FragCoord.xy/uResolution*2.-1.;vec4 farPoint=uInverseProjection*vec4(ndc,1.,1.);vec3 ray=normalize(farPoint.xyz/farPoint.w);
  float along=dot(ray,vCenter),radius2=vRadius*vRadius,disc=along*along-dot(vCenter,vCenter)+radius2;
@@ -50,7 +51,7 @@ void main(){
  vec4 clip=uProjection*vec4(hit,1.);gl_FragDepth=clamp(clip.z/clip.w*.5+.5,0.,1.);
  // Local GPU tests encode the actual sphere-surface depth; production never enables this mode.
  if(uDebug>1.5){float n=floor(gl_FragDepth*16777215.+.5);outColor=vec4(floor(n/65536.),mod(floor(n/256.),256.),mod(n,256.),255.)/255.;return;}
- float coverage=smoothstep(0.,max(fwidth(disc)*1.2,radius2*.005),disc),alpha=vOpacity*coverage;if(alpha<.018)discard;
+ float coverage=smoothstep(0.,max(fwidth(disc)*.8,radius2*.005),disc),alpha=vOpacity*coverage;if(alpha<.018)discard;
  if(uDebug>.5){vec3 axis=uBeamViewB-uBeamViewA;float dr=dot(ray,axis),t=clamp((dr*dot(ray,uBeamViewA)-dot(axis,uBeamViewA))/max(.000001,dot(axis,axis)-dr*dr),0.,1.);float axisDepth=(uBeamViewA+axis*t).z;outColor=vec4(hit.z>axisDepth?vec3(.95,.05,.025):vec3(.025,.16,1.),alpha);return;}
  float diffuse=max(dot(N,vLight),0.),facing=max(dot(N,V),0.);
  vec3 tint=mix(vec3(1.),uBeamLightColor,uDiffuse*.65*diffuse);

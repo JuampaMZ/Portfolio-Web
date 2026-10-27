@@ -30,13 +30,13 @@ export const rgb=hex=>[1,3,5].map(offset=>parseInt(hex.slice(offset,offset+2),16
 export function createGpuResources(gl){
  const programs=[],shaders=[];let disposed=false;
  return {
-  program(vertex,fragment,names,feedback=false,separate=false){
+  program(vertex,fragment,names,feedback=false,separate=false,varyings=['nextPosition','nextVelocity']){
    const program=gl.createProgram();programs.push(program);
    for(const [type,code]of[[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]){
     const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,code);gl.compileShader(shader);
     if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));gl.attachShader(program,shader);
    }
-   if(feedback)gl.transformFeedbackVaryings(program,['nextPosition','nextVelocity'],separate?gl.SEPARATE_ATTRIBS:gl.INTERLEAVED_ATTRIBS);
+   if(feedback)gl.transformFeedbackVaryings(program,varyings,separate?gl.SEPARATE_ATTRIBS:gl.INTERLEAVED_ATTRIBS);
    gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
    return {program,u:Object.fromEntries(names.map(name=>[name,gl.getUniformLocation(program,name)]))};
   },

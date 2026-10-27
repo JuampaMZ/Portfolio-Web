@@ -66,3 +66,6 @@ body{isolation:isolate;background:#04080d}.cinema,.cinema-sticky{background:tran
 .is-preparing .cosmic-static,.has-renderer .cosmic-static,.has-safe-renderer .cosmic-static{opacity:0}
 .cosmic-static i,.cosmic-static b{position:absolute;width:28%;aspect-ratio:1;left:36%;top:22%;border:2px solid #e7f0ea;border-right-color:transparent;border-radius:50%;opacity:var(--fallback-formed,0);transform:perspective(600px) rotateX(58deg) rotateZ(35deg);box-shadow:0 0 12px #b3d8c933}.cosmic-static b{transform:perspective(600px) rotateY(58deg) rotateZ(-35deg)}
 @media(max-width:700px){.cinema .cinema-sticky{min-height:0}.cosmic-static i,.cosmic-static b{width:58%;left:21%}}
+
+/* Keep the pinned GPU surface in its own paint boundary during wheel travel. */
+.cinema-sticky{contain:layout paint}

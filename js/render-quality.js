@@ -15,12 +15,12 @@ export function gpuCapabilities(gl){
 }
 export function qualityProfile(cap,width,{coarse=false,memory=8,forceLow=false,forceLdr=false}={},config){
  const mobile=width<=700||coarse,low=forceLow||forceLdr||memory<=2||!cap.hdr,hdr=!!cap.hdr&&!low;
- if(!cap.webgl2||!cap.rgba8||cap.precision<20||cap.feedback<2)return {name:'canvas-safe',mobile,hdr:false,fallback:true};
+ if(!cap.webgl2||!cap.rgba8||cap.precision<20||cap.feedback<3)return {name:'canvas-safe',mobile,hdr:false,fallback:true};
  const ringScale=mobile?1:config.desktopRingScale;
  const base=mobile?(low?config.mobileLowCount:config.mobileCount):Math.round((config.count-config.beamDustCount)*ringScale+config.beamDustCount);
  return {name:mobile?(low?'mobile-safe':'mobile-hdr'):(hdr?'desktop-hdr':'desktop-ldr'),mobile,hdr,fallback:false,
   coreCount:base,beamCount:mobile?(low?config.mobileLowBeamCount:config.mobileBeamCount):config.beamParticleCount,
   pixelBudget:mobile?(low?config.mobileLowPixelBudget:config.mobilePixelBudget):config.renderPixelBudget,maxDpr:mobile?config.mobileMaxDpr:config.maxDpr,
-  bloomScale:mobile?.24:config.bloomResolution,bloomStrength:hdr?(mobile?config.mobileBloomStrength:config.desktopBloomStrength):0,ringScale,
+  bloomScale:mobile?Math.min(.24,Math.sqrt(15000/(low?config.mobileLowPixelBudget:config.mobilePixelBudget))):Math.min(config.bloomResolution,Math.sqrt(100000/config.renderPixelBudget)),bloomStrength:hdr?(mobile?config.mobileBloomStrength:config.desktopBloomStrength):0,ringScale,
   sceneScale:mobile?null:.82,beamLengthScale:mobile?1:config.desktopRingScale};
 }

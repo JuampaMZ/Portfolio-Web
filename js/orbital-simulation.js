@@ -62,23 +62,27 @@ vec3 nucleusPointer(vec3 p,float id){
 `;
 export const simulationVertex=`#version 300 es
 precision highp float;
-layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;
+layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aVelocity;layout(location=2) in vec3 aAnchor;
 uniform float uTime,uDt,uReset,uSpring,uDamping,uAspect,uRecycleWindow;
-out vec3 nextPosition,nextVelocity;
+out vec3 nextPosition,nextVelocity,nextAnchor;
 `+gpuMath+cosmicUniforms+orbitalSource+cosmicSource+`
 void main(){
- float id=float(gl_VertexID),seed=random(id+1.);
- vec3 target=orbitalTarget(id,uTime);
- bool wrapped=inBeam(id)?abs(beamPhase(id,uTime)-beamPhase(id,uTime-uRecycleWindow))>.5:((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5);
- if(uStoryActive>.5&&uBigBang<1.){
-  target=cosmicTarget(id,uBigBang,uVisualTime,target);float inertia=bangSmooth(uPhases.w,1.,uBigBang);
-  float spring=uSpring*mix(1.-uReturnSpread*.7,1.+uReturnSpread*.3,random(id+83.));vec3 force=(target-aPosition)*spring-aVelocity*uDamping+nucleusPointer(aPosition,id)*inertia;
-  vec3 v=aVelocity+force*uDt;v*=min(1.,4./max(length(v),.0001));nextPosition=uReset>.5?target:mix(target,aPosition+v*uDt,inertia);
-  nextVelocity=uReset>.5?vec3(0.):mix((nextPosition-aPosition)/max(.001,uDt),v,inertia);nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
- }else if(uReset>.5||wrapped){nextPosition=target;nextVelocity=vec3(0.);}
+ float id=float(gl_VertexID);bool story=uStoryActive>.5;
+ // The analytic trajectory and pointer displacement have independent GPU state.
+ // Scroll changes the anchor, never overwrites the spring's offset or velocity.
+ vec3 target=story&&uBigBang<uPhases.z?vec3(0.):orbitalTarget(id,uTime);
+ if(story&&uBigBang<1.)target=cosmicTarget(id,uBigBang,uVisualTime,target);
+ bool wrapped=false;
+ if(!story||uBigBang>=uPhases.w)wrapped=inBeam(id)?abs(beamPhase(id,uTime)-beamPhase(id,uTime-uRecycleWindow))>.5:((inBand(id)||inGap(id))?abs(ringPhase(id,uTime)-ringPhase(id,uTime-uRecycleWindow))>.5:abs(dustPhase(id,uTime)-dustPhase(id,uTime-uRecycleWindow))>.5);
+ nextAnchor=target;
+ if(uReset>.5||wrapped){nextPosition=target;nextVelocity=vec3(0.);}
  else{
+  vec3 offset=aPosition-aAnchor;
   float spring=uSpring*mix(1.-uReturnSpread*.7,1.+uReturnSpread*.3,random(id+83.)),damping=uDamping*mix(.84,1.13,random(id+89.));
-  vec3 force=(target-aPosition)*spring-aVelocity*damping+nucleusPointer(aPosition,id);nextVelocity=aVelocity+force*uDt;nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));nextPosition=aPosition+nextVelocity*uDt;
+  float visible=story?bangSmooth(uPhases.x,uPhases.x+(uPhases.y-uPhases.x)*.28,uBigBang):1.;
+  vec3 force=-offset*spring-aVelocity*damping+nucleusPointer(aPosition,id)*visible;
+  nextVelocity=aVelocity+force*uDt;nextVelocity*=min(1.,4./max(length(nextVelocity),.0001));
+  nextPosition=target+offset+nextVelocity*uDt;
  }
  gl_Position=vec4(0.);
 }`;

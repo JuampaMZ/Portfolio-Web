@@ -171,7 +171,7 @@ playback.addEventListener('click', () => {
   if (!userPaused) { playback.blur(); browser.blur(); manualUntil = 0; }
 });
 function updatePointerPosition() {
-  if (!mouseCoordinates) { pointerPosition = null; return; }
+  if (!onScreen || !mouseCoordinates) { pointerPosition = null; return; }
   const bounds = browser.getBoundingClientRect();
   // Listen across the viewport, including the margins outside the cards.
   // Leaving a card or the content column must not reset edge acceleration.

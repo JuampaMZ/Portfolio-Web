@@ -44,29 +44,36 @@ void main(){
  vec3 tint=light/max(density,.0001);
  color=vec4(tint,alpha);
 }`;
-export function createAuroraRenderer(canvas){
+// The aurora shares the back-star context, but its expensive shader stays quarter resolution.
+export function createAuroraRenderer(canvas,{shared=false}={}){
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,powerPreference:'low-power'});if(!gl)return null;
- const resources=createGpuResources(gl);let vao=null,disposed=false,width=0,height=0,ratio=0;
+ const resources=createGpuResources(gl);let vao=null,texture=null,frame=null,disposed=false,width=0,height=0,ratio=0,targetWidth=1,targetHeight=1;
  const names=['uResolution','uPointerPan','uTime','uScroll','uIntensity','uSpeed','uNoiseScale','uScrollAmount','uPointer','uCurtains','uMaskCount','uColorA','uColorB','uColorC','uColorD','uTrail[0]','uMasks[0]'];
- function dispose(){if(disposed)return;disposed=true;if(vao)gl.deleteVertexArray(vao);resources.dispose();}
+ function dispose(){if(disposed)return;disposed=true;if(vao)gl.deleteVertexArray(vao);if(texture)gl.deleteTexture(texture);if(frame)gl.deleteFramebuffer(frame);resources.dispose();}
  try{
   const target=resources.program(fullscreenVertex,fragment,names);vao=gl.createVertexArray();
+  const composite=shared?resources.program(fullscreenVertex,`#version 300 es
+precision mediump float;uniform sampler2D uAurora;uniform vec2 uOutputSize;out vec4 color;void main(){color=texture(uAurora,gl_FragCoord.xy/uOutputSize);}`, ['uAurora','uOutputSize']):null;
+  if(shared){texture=gl.createTexture();frame=gl.createFramebuffer();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.bindTexture(gl.TEXTURE_2D,null);}
   return {
    resize(force=false){
     const w=innerWidth,h=innerHeight,mobile=w<=700||matchMedia('(pointer:coarse)').matches,next=Math.min(.6,Math.max(.15,mobile?config.auroraMobileResolution:config.auroraResolution));
     if(!force&&w===width&&h===height&&ratio===next)return;if(w<=0||h<=0)return;
-    width=w;height=h;ratio=next;canvas.width=Math.max(1,Math.round(w*ratio));canvas.height=Math.max(1,Math.round(h*ratio));gl.viewport(0,0,canvas.width,canvas.height);canvas.dataset.resolutionScale=ratio.toFixed(2);
+    width=w;height=h;ratio=next;targetWidth=Math.max(1,Math.round(w*ratio));targetHeight=Math.max(1,Math.round(h*ratio));
+    if(shared){gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,targetWidth,targetHeight,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.bindFramebuffer(gl.FRAMEBUFFER,frame);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.bindTexture(gl.TEXTURE_2D,null);if(!ok)throw Error('Framebuffer de aurora no disponible.');}
+    else{canvas.width=targetWidth;canvas.height=targetHeight;}canvas.dataset.resolutionScale=ratio.toFixed(2);canvas.dataset.auroraShared=String(shared);
    },
    draw(time,scroll,trail,masks=new Float32Array(48),maskCount=0){
     if(disposed||gl.isContextLost())return;
-    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);if(config.auroraIntensity<=0)return;gl.useProgram(target.program);const u=target.u;
-    gl.uniform2f(u.uResolution,canvas.width,canvas.height);gl.uniform2f(u.uPointerPan,trail[2]>0?trail[0]*.004:0,trail[2]>0?trail[1]*.004:0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,shared?frame:null);gl.viewport(0,0,targetWidth,targetHeight);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(target.program);const u=target.u;
+    gl.uniform2f(u.uResolution,targetWidth,targetHeight);gl.uniform2f(u.uPointerPan,trail[2]>0?trail[0]*.004:0,trail[2]>0?trail[1]*.004:0);
     for(const [name,value]of Object.entries({uTime:time,uScroll:scroll,uIntensity:config.auroraIntensity,uSpeed:config.auroraSpeed,uNoiseScale:config.auroraNoiseScale,uScrollAmount:config.auroraScroll,uPointer:config.auroraPointer}))gl.uniform1f(u[name],value);
     gl.uniform1i(u.uCurtains,Math.max(1,Math.min(4,Math.round(config.auroraCurtains))));gl.uniform1i(u.uMaskCount,maskCount);
     for(const key of ['A','B','C','D'])gl.uniform3fv(u['uColor'+key],rgb(config['auroraColor'+key]));
     gl.uniform4fv(u['uTrail[0]'],trail);gl.uniform4fv(u['uMasks[0]'],masks);
-    gl.bindVertexArray(vao);gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.BLEND);gl.bindVertexArray(null);
-    canvas.dataset.animationTime=time.toFixed(2);canvas.dataset.scrollFlow=scroll.toFixed(3);
+    gl.bindVertexArray(vao);gl.enable(gl.BLEND);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,3);gl.disable(gl.BLEND);
+    if(shared){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(composite.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(composite.u.uAurora,0);gl.uniform2f(composite.u.uOutputSize,canvas.width,canvas.height);gl.drawArrays(gl.TRIANGLES,0,3);gl.bindTexture(gl.TEXTURE_2D,null);}
+    gl.bindVertexArray(null);canvas.dataset.auroraTime=time.toFixed(2);canvas.dataset.scrollFlow=scroll.toFixed(3);
    },dispose
   };
  }catch(error){dispose();console.warn('La aurora conserva el fondo galáctico.',error.message);return null;}

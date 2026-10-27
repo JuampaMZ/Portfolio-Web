@@ -6,7 +6,7 @@ export function bigBangState(progress,c){
  return {progress:p,phases,phase:p<a?'singularity':p<b?'explosion':p<d?'expansion':p<e?'absorption':'formed',
   beam:smooth(d,e,p),background:smooth(b,d,p),text:smooth(e,1,p),visible:smooth(a,a+(b-a)*.28,p)};
 }
-export function createBangProgress(c){let p=0;return {step(target,dt){p+=(clamp01(target)-p)*(1-Math.exp(-Math.max(0,dt)/c.bangScrollSmoothing));if(Math.abs(p-target)<.00005)p=clamp01(target);return p;},seek(value){p=clamp01(value);return p;}};}
+export function createBangProgress(c){let p=0;return {step(target,dt,smoothing=c.bangScrollSmoothing){p+=(clamp01(target)-p)*(1-Math.exp(-Math.max(0,dt)/smoothing));if(Math.abs(p-target)<.00005)p=clamp01(target);return p;},seek(value){p=clamp01(value);return p;}};}
 export const cosmicUniforms=`uniform float uBigBang,uStoryActive,uBangAttraction,uBeamCount,uCoreCount,uBeamLength,uBeamRadius,uBeamVariant,uVisualTime;uniform vec4 uPhases;uniform vec3 uHotA,uHotB;bool inBeam(float id){return id>=uCoreCount;}vec3 beamPhoton(float id,float time);`;
 export const cosmicSource=`
 float bangSmooth(float a,float b,float p){float t=clamp((p-a)/max(.0001,b-a),0.,1.);return t*t*(3.-2.*t);}
@@ -21,6 +21,8 @@ vec3 bangCloud(float id,float p,float time){
  vec3 result=mix(burst,cloud,bangSmooth(uPhases.y,uPhases.z,p))*uPlacement.z*1.5;result.z=clamp(result.z,-.8,.65);return result;
 }
 vec3 cosmicTarget(float id,float p,float time,vec3 orbit){
+ if(p>=uPhases.w)return orbit;
+ if(p<=uPhases.z)return bangCloud(id,p,time);
  vec3 cloud=bangCloud(id,min(p,uPhases.z),time);float t=bangSmooth(uPhases.z,uPhases.w,p);t=pow(t,1./max(.3,uBangAttraction));
  float swirl=sin(t*3.14159265)*(1.-t)*4.;vec3 q=transpose(uBeamBasis)*cloud;q.xz=mat2(cos(swirl),-sin(swirl),sin(swirl),cos(swirl))*q.xz;
  return mix(uBeamBasis*q,orbit,t);

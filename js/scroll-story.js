@@ -1,5 +1,6 @@
 import {createAnimationClock} from './animation-clock.js';
 import {createScrollDrive} from './scroll-drive.js';
+import {createIntroWheel} from './intro-scroll.js';
 import {PARTICLE_CONFIG as config} from './particle-config.js';
 import {bigBangState,createBangProgress,clamp01,smooth} from './big-bang.js';
 import {initAtmosphere} from './atmosphere.js';
@@ -18,10 +19,10 @@ export function initScrollStory(){
  const root=document.documentElement,header=document.querySelector('.header'),stage=section.querySelector('.cinema-sticky'),canvas=section.querySelector('.cinema-canvas'),fallback=section.querySelector('canvas.cinema-fallback'),copy=section.querySelector('.cinema-copy');
  const acts=[...section.querySelectorAll('[data-story-act]')],lines=[...acts[0].querySelectorAll('.cinema-line>span')],counter=section.querySelector('.cinema-count'),progressBar=section.querySelector('.cinema-progress i');
  const controller=new AbortController(),on=(target,event,handler,options={})=>target?.addEventListener(event,handler,{...options,signal:controller.signal});
- const input=createParticleInput(),atmosphere=initAtmosphere(input),clock=createAnimationClock(),drive=createScrollDrive(config),bangProgress=createBangProgress(config),empty=new Float32Array(32);
+ const input=createParticleInput(),atmosphere=initAtmosphere(input),clock=createAnimationClock(),drive=createScrollDrive(config),bangProgress=createBangProgress(config),wheel=createIntroWheel(section,config),empty=new Float32Array(32);
  let renderer,ready=false,destroyed=false,raf=0,scrollRaf=0,scrollRequested=false,previous=0,orbitTime=0,bangTarget=0,rawProgress=0,epoch=0,recoveries=0,lastScrollY=scrollY,resizeTimer=0;
  let stableHeight=Math.max(240,Math.round(window.visualViewport?.height||innerHeight)),stableWidth=document.documentElement.clientWidth;
- let lastRender=null,lastCopy=-1,lastBackground=-1,lastBeam=-1,lastPercent=-1;let bounds=stage.getBoundingClientRect();const quality={forceLow:local&&query.get('quality')==='low',forceLdr:local&&query.get('quality')==='ldr'};
+ let lastRender=null,lastCopy=-1,lastBackground=-1,lastBeam=-1,lastPercent=-1;let bounds=stage.getBoundingClientRect(),layout={top:0,height:1,stageHeight:1,stageWidth:1,left:0,headerHeight:88,pageRange:1};const quality={forceLow:local&&query.get('quality')==='low',forceLdr:local&&query.get('quality')==='ldr'};
  acts.forEach((act,index)=>{act.style.setProperty('--act-opacity',index===0?'1':'0');act.style.setProperty('--act-y','0px');act.style.setProperty('--act-blur','0px');act.setAttribute('aria-hidden',String(index!==0));act.querySelectorAll('a').forEach(a=>a.tabIndex=index===0?0:-1);});
  const benchmark=local&&query.get('benchmark')==='1';let meter=null;if(benchmark)import('./performance-meter.js').then(({createPerformanceMeter})=>{if(!destroyed)meter=createPerformanceMeter(canvas);});
  renderer=createCinemaRenderer(canvas,{fallbackCanvas:fallback,forceFallback:local&&query.get('safe')==='1',quality});
@@ -29,10 +30,11 @@ export function initScrollStory(){
  function requestFrame(){if(ready&&!destroyed&&!document.hidden&&!raf)raf=requestAnimationFrame(draw);}
  function draw(now){
   raf=0;if(destroyed||document.hidden)return;const dt=previous?Math.max(0,(now-previous)/1000):0;previous=now;
+  if(wheel.step(dt)||scrollRequested)updateScroll();
   if(!canvas.dataset.introStartedAt){canvas.dataset.introStartedAt=String(performance.now());canvas.dataset.clock='scroll-progress';}
-  const time=captureTime??clock.sample(now),p=captureBang??bangProgress.step(bangTarget,dt),bang=bigBangState(p,config),motion=captureTime!==null?{phase:time,rate:1,energy:0,extraAngle:0}:drive.step(now,dt);
+  const time=captureTime??clock.sample(now),p=captureBang??bangProgress.step(bangTarget,dt,wheel.enabled?config.desktopProgressSmoothing:config.bangScrollSmoothing),bang=bigBangState(p,config),motion=captureTime!==null?{phase:time,rate:1,energy:0,extraAngle:0}:drive.step(now,dt);
   orbitTime+=dt*smooth(config.bangAbsorptionEnd,1,p);Object.assign(motion,{bigBang:p,orbitTime:captureTime!==null?(p>=.9?time:0):orbitTime});
-  const trail=captureTime!==null?empty:input.sample(stage.clientWidth,stage.clientHeight,bounds.top,bounds.left,bounds.bottom>0&&bounds.top<innerHeight);
+  const trail=captureTime!==null?empty:input.sample(layout.stageWidth,layout.stageHeight,bounds.top,bounds.left,bounds.bottom>0&&bounds.top<innerHeight);
   const begin=meter?performance.now():0;
   lastRender={time,trail,motion};renderer?.draw(time,rawProgress,trail,[0,0],motion);meter?.frame(now,time,performance.now()-begin);
   if(renderer?.canvas!==canvas&&renderer?.canvas)Object.assign(canvas.dataset,renderer.canvas.dataset);
@@ -46,9 +48,9 @@ export function initScrollStory(){
   }
   stage.dataset.intro='ready';stage.dataset.bangPhase=bang.phase;const percent=Math.round(p*100);if(percent!==lastPercent){counter.textContent=percent+'%';lastPercent=percent;}requestFrame();
  }
- function updateScroll(){scrollRaf=0;scrollRequested=false;const r=section.getBoundingClientRect();bounds=stage.getBoundingClientRect();rawProgress=scrollProgress(r.top,r.height,stage.clientHeight,0);bangTarget=clamp01(rawProgress/config.bangFormationScroll);header.classList.toggle('cinema-header',r.bottom>header.offsetHeight+20);const total=root.scrollHeight-innerHeight;header.style.setProperty('--page-progress',(total>0?clamp01(scrollY/total)*100:0)+'%');progressBar.style.width=(bangTarget*100)+'%';}
- function requestScroll(){if(!destroyed&&!scrollRequested){scrollRequested=true;scrollRaf=requestAnimationFrame(updateScroll);}}
- function resize(force=false){section.dataset.formationScroll=String(config.bangFormationScroll);root.style.setProperty('--header-height',header.offsetHeight+'px');root.style.setProperty('--stage-height',stableHeight+'px');section.style.height=Math.round(stableHeight*config.bangHeightVh/100)+'px';root.classList.add('scroll-enhanced');renderer?.resize(Math.max(1,stage.clientWidth),Math.max(1,stage.clientHeight),force);bounds=stage.getBoundingClientRect();requestScroll();}
+ function updateScroll(){scrollRaf=0;scrollRequested=false;const top=layout.top-scrollY,bottom=top+layout.height,stageTop=Math.min(Math.max(0,top),bottom-layout.stageHeight);bounds={top:stageTop,bottom:stageTop+layout.stageHeight,left:layout.left};rawProgress=scrollProgress(top,layout.height,layout.stageHeight,0);bangTarget=clamp01(rawProgress/config.bangFormationScroll);header.classList.toggle('cinema-header',bottom>layout.headerHeight+20);header.style.setProperty('--page-progress',(layout.pageRange>0?clamp01(scrollY/layout.pageRange)*100:0)+'%');progressBar.style.width=(bangTarget*100)+'%';}
+ function requestScroll(){if(!destroyed){scrollRequested=true;requestFrame();}}
+ function resize(force=false){section.dataset.formationScroll=String(config.bangFormationScroll);root.style.setProperty('--header-height',header.offsetHeight+'px');root.style.setProperty('--stage-height',stableHeight+'px');section.style.height=Math.round(stableHeight*config.bangHeightVh/100)+'px';root.classList.add('scroll-enhanced');const r=section.getBoundingClientRect(),s=stage.getBoundingClientRect();layout={top:r.top+scrollY,height:r.height,stageHeight:stage.clientHeight,stageWidth:stage.clientWidth,left:s.left,headerHeight:header.offsetHeight,pageRange:root.scrollHeight-innerHeight};renderer?.resize(Math.max(1,layout.stageWidth),Math.max(1,layout.stageHeight),force);bounds=s;requestScroll();}
  function scheduleResize(){clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(destroyed)return;const w=document.documentElement.clientWidth,h=Math.max(240,Math.round(window.visualViewport?.height||innerHeight));if(Math.abs(w-stableWidth)>2||Math.abs(h-stableHeight)>96||w>700){stableWidth=w;stableHeight=h;resize();}else requestScroll();},180);}
  function useFallback(reason){const old=renderer;renderer=createCinemaRenderer(canvas,{fallbackCanvas:fallback,forceFallback:true});old?.dispose();canvas.dataset.fallbackReason=reason;resize();if(lastRender)renderer?.seek(lastRender.time,rawProgress,lastRender.trail,[0,0],lastRender.motion);classes();section.classList.remove('is-preparing');ready=true;requestFrame();}
  async function prepare(candidate=renderer,restoring=false){const id=++epoch;
@@ -87,6 +89,6 @@ export function initScrollStory(){
 
 
  const resizeObserver=new ResizeObserver(()=>resize());resizeObserver.observe(header);
- function dispose(){if(destroyed)return;destroyed=true;epoch++;controller.abort();clearTimeout(resizeTimer);clearTimeout(window.craftCoreWatchdog);if(raf)cancelAnimationFrame(raf);if(scrollRaf)cancelAnimationFrame(scrollRaf);revealObserver.disconnect();resizeObserver.disconnect();meter?.dispose();renderer?.dispose();atmosphere.dispose();input.dispose();root.classList.remove('scroll-enhanced');}
+ function dispose(){if(destroyed)return;destroyed=true;epoch++;controller.abort();clearTimeout(resizeTimer);clearTimeout(window.craftCoreWatchdog);if(raf)cancelAnimationFrame(raf);if(scrollRaf)cancelAnimationFrame(scrollRaf);revealObserver.disconnect();resizeObserver.disconnect();meter?.dispose();renderer?.dispose();atmosphere.dispose();wheel.dispose();input.dispose();root.classList.remove('scroll-enhanced');}
  on(window,'pagehide',event=>{if(!event.persisted)dispose();});resize();updateScroll();prepare();return dispose;
 }

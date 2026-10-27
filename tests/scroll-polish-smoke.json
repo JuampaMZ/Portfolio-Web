@@ -1,0 +1,18 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "fastReverse": {
+        "before": 467,
+        "after": 413
+      }
+    },
+    {
+      "backgroundRestored": "true",
+      "glError": 0
+    },
+    {
+      "coreRecovery": "Canvas2D -> WebGL2 RGBA8"
+    }
+  ]
+}
