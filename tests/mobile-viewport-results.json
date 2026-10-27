@@ -1,0 +1,182 @@
+{
+  "errors": [],
+  "toolbar": [
+    {
+      "innerHeight": 844,
+      "stage": {
+        "top": 0,
+        "height": 844,
+        "bottom": 844
+      },
+      "core": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "back": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "front": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "phase": "0.45009",
+      "reference": "844",
+      "allocations": {
+        "buffers": 0,
+        "textures": 0
+      }
+    },
+    {
+      "innerHeight": 885,
+      "stage": {
+        "top": 0,
+        "height": 885,
+        "bottom": 885
+      },
+      "core": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "back": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "front": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "phase": "0.45009",
+      "reference": "844",
+      "allocations": {
+        "buffers": 0,
+        "textures": 0
+      }
+    },
+    {
+      "innerHeight": 932,
+      "stage": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "core": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "back": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "front": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "phase": "0.45009",
+      "reference": "844",
+      "allocations": {
+        "buffers": 0,
+        "textures": 0
+      }
+    },
+    {
+      "innerHeight": 855,
+      "stage": {
+        "top": 0,
+        "height": 855,
+        "bottom": 855
+      },
+      "core": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "back": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "front": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "phase": "0.45009",
+      "reference": "844",
+      "allocations": {
+        "buffers": 0,
+        "textures": 0
+      }
+    },
+    {
+      "innerHeight": 932,
+      "stage": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "core": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "back": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "front": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "phase": "0.45009",
+      "reference": "844",
+      "allocations": {
+        "buffers": 0,
+        "textures": 0
+      }
+    },
+    {
+      "innerHeight": 844,
+      "stage": {
+        "top": 0,
+        "height": 844,
+        "bottom": 844
+      },
+      "core": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "back": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "front": {
+        "top": 0,
+        "height": 932,
+        "bottom": 932
+      },
+      "phase": "0.45009",
+      "reference": "844",
+      "allocations": {
+        "buffers": 0,
+        "textures": 0
+      }
+    }
+  ],
+  "validation": "Viewport/touch emulation with fixed svh/lvh probes; not a physical Safari test",
+  "intro-pointer-gpu.html": "passed",
+  "cosmic-gpu.html": "passed"
+}

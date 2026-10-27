@@ -4,7 +4,7 @@ import {orbitalSource} from './orbital-simulation.js';
 
 export const sphereVertex=`
 in vec3 velocity;
-uniform float uSphereRadius,uViewportHeight,uDpr,uLodPixels,uDofStrength,uFocusRange,uFocusDistance,uDebug,uSingleRing,uTime,uRingOpacity;
+uniform float uBangSphereRadius,uSphereRadius,uViewportHeight,uDpr,uLodPixels,uDofStrength,uFocusRange,uFocusDistance,uDebug,uSingleRing,uTime,uRingOpacity;
 uniform vec3 uParticleColor,uDustColor,uBeamViewA,uBeamViewB;
 flat out vec3 vCenter,vLight,vHalf,vBase;flat out float vRadius,vOpacity,vDetail,vBlur,vKind,vActivity,vFormation;
 `+gpuMath+cosmicUniforms+orbitalSource+cosmicSource+`
@@ -14,7 +14,7 @@ void main(){
  if(uSingleRing>.5&&!photon&&(!band||secondRing(id)))gl_Position=vec4(3.,3.,3.,1.);
  float formed=uStoryActive>.5?bangSmooth(uPhases.z,uPhases.w,uBigBang):1.;vFormation=formed;
  vRadius=uSphereRadius*(.75+seed*.5)*(band?1.:(gap?.32:.28));if(photon)vRadius=uSphereRadius*(.22+seed*.16);
- vRadius=mix(uSphereRadius*(.28+seed*.35),vRadius,formed);
+ vRadius=mix(uBangSphereRadius*(.28+seed*.35),vRadius,formed);
  float diameter=vRadius*uViewportHeight*projectionMatrix[1][1]/max(.05,-view.z);
  vBlur=clamp((abs(-view.z-uFocusDistance)-uFocusRange)/max(.05,uFocusRange),0.,1.)*uDofStrength;
  gl_PointSize=max(photon?2.:1.,diameter*(1.+vBlur)*1.05);vDetail=step(uLodPixels,diameter/uDpr);vKind=photon?3.:(band?0.:(gap?1.:2.));

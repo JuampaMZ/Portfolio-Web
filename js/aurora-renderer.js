@@ -57,7 +57,7 @@ precision mediump float;uniform sampler2D uAurora;uniform vec2 uOutputSize;out v
   if(shared){texture=gl.createTexture();frame=gl.createFramebuffer();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.bindTexture(gl.TEXTURE_2D,null);}
   return {
    resize(force=false){
-    const w=innerWidth,h=innerHeight,mobile=w<=700||matchMedia('(pointer:coarse)').matches,next=Math.min(.6,Math.max(.15,mobile?config.auroraMobileResolution:config.auroraResolution));
+    const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),mobile=w<=700||matchMedia('(pointer:coarse)').matches,next=Math.min(.6,Math.max(.15,mobile?config.auroraMobileResolution:config.auroraResolution));
     if(!force&&w===width&&h===height&&ratio===next)return;if(w<=0||h<=0)return;
     width=w;height=h;ratio=next;targetWidth=Math.max(1,Math.round(w*ratio));targetHeight=Math.max(1,Math.round(h*ratio));
     if(shared){gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,targetWidth,targetHeight,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.bindFramebuffer(gl.FRAMEBUFFER,frame);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.bindTexture(gl.TEXTURE_2D,null);if(!ok)throw Error('Framebuffer de aurora no disponible.');}

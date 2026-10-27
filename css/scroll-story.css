@@ -69,3 +69,10 @@ body{isolation:isolate;background:#04080d}.cinema,.cinema-sticky{background:tran
 
 /* Keep the pinned GPU surface in its own paint boundary during wheel travel. */
 .cinema-sticky{contain:layout paint}
+/* Reveal the same continuous surface when mobile browser chrome retracts. */
+.cinema-canvas,.cinema-fallback,.cinema-shade,.cosmic-static{height:var(--surface-height,var(--stage-height,100svh))}
+@media(max-width:700px),(pointer:coarse){
+ .cinema .cinema-sticky{height:100vh;height:var(--visible-height,100dvh)}
+ .ambient-layer{height:100vh;height:var(--surface-height,100lvh)}
+ .cinema-bottom{bottom:calc(23px + env(safe-area-inset-bottom,0px))}
+}

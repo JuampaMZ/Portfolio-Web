@@ -98,7 +98,7 @@ export function createGalaxyRenderer(canvas,front=false){
   const simulation=resources.program(galaxySimulation,emptyFragment,names,true),points=resources.program(galaxyVertex,galaxyFragment,names);
   const api={
    resize(force=false){
-    const w=innerWidth,h=innerHeight,budget=layerBudget(w,front,{coarse:matchMedia('(pointer:coarse)').matches}),ratio=Math.min(devicePixelRatio||1,config.maxDpr,w<=700?.85:1.25);
+    const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),budget=layerBudget(w,front,{coarse:matchMedia('(pointer:coarse)').matches}),ratio=Math.min(devicePixelRatio||1,config.maxDpr,w<=700?.85:1.25);
     if(!force&&width===w&&height===h&&budget===count&&ratio===dpr)return;
     width=w;height=h;count=budget;dpr=ratio;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);gl.viewport(0,0,canvas.width,canvas.height);
     state?.dispose();state=createGpuState(gl,count);reset=true;lastTime=null;accumulator=0;canvas.dataset.ambientCount=String(count);
@@ -129,12 +129,13 @@ export function createGalaxyRenderer(canvas,front=false){
 
 export function initAtmosphere(sharedInput=null){
  const controller=new AbortController(),input=sharedInput||createParticleInput();
- const on=(target,event,callback,options={})=>target.addEventListener(event,callback,{passive:true,...options,signal:controller.signal});
+ const on=(target,event,callback,options={})=>target?.addEventListener(event,callback,{passive:true,...options,signal:controller.signal});
  const back=document.createElement('canvas'),front=document.createElement('canvas');
  back.className='ambient-layer ambient-layer--back';front.className='ambient-layer ambient-layer--front';
  for(const element of [back,front]){element.setAttribute('aria-hidden','true');element.style.opacity='0';}document.body.prepend(back);document.body.append(front);
  let layers=[createGalaxyRenderer(back),createGalaxyRenderer(front,true)],raf=0,previous=0,time=0,disposed=false,lastMasks=-1000,lastBackgroundFrame=-Infinity,scrollFlow=scrollY/innerHeight,aurora=createAuroraRenderer(back,{shared:true});
  const masks=new Float32Array(48);let maskCount=0;
+ let surfaceWidth=Math.max(1,back.clientWidth),surfaceHeight=Math.max(1,back.clientHeight);
  const visibleText=new Set(),textObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting)visibleText.add(entry.target);else visibleText.delete(entry.target);}lastMasks=-1000;});
  document.querySelectorAll('h1,h2,.cinema-description,.about-copy>p,.contact-lead').forEach(element=>textObserver.observe(element));
  function updateMasks(now){
@@ -142,27 +143,26 @@ export function initAtmosphere(sharedInput=null){
   for(const element of visibleText){
    if(maskCount>=12)break;if(element.closest('[aria-hidden="true"]'))continue;
    const r=element.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight||r.width===0||r.height===0)continue;
-   masks.set([(r.left-12-innerWidth*.5)/innerHeight,(innerHeight*.5-r.bottom-12)/innerHeight,(r.right+12-innerWidth*.5)/innerHeight,(innerHeight*.5-r.top+12)/innerHeight],maskCount++*4);
+   masks.set([(r.left-12-surfaceWidth*.5)/surfaceHeight,(surfaceHeight*.5-r.bottom-12)/surfaceHeight,(r.right+12-surfaceWidth*.5)/surfaceHeight,(surfaceHeight*.5-r.top+12)/surfaceHeight],maskCount++*4);
   }
  }
  function request(){if(!disposed&&!document.hidden&&!raf)raf=requestAnimationFrame(draw);}
  function draw(now){
   raf=0;if(disposed||document.hidden)return;const dt=previous?Math.min((now-previous)/1000,.05):0;time+=dt;previous=now;
-  updateMasks(now);const trail=input.sample(innerWidth,innerHeight);
-  scrollFlow+=(scrollY/innerHeight-scrollFlow)*(1-Math.exp(-dt*2.4));
+  updateMasks(now);const trail=input.sample(surfaceWidth,surfaceHeight);
+  scrollFlow+=(scrollY/surfaceHeight-scrollFlow)*(1-Math.exp(-dt*2.4));
   const backgroundInterval=innerWidth>700&&!matchMedia('(pointer:coarse)').matches?1000/config.desktopBackgroundFps:0;
   if(now-lastBackgroundFrame>=backgroundInterval-.5){aurora?.draw(time,scrollFlow,trail,masks,maskCount);layers[0]?.draw(time,trail,masks,0,!aurora);layers[1]?.draw(time,trail,masks,maskCount);lastBackgroundFrame=now;}
     request();
  }
- function resize(force=false){layers.forEach(layer=>layer?.resize(force));aurora?.resize(force);lastMasks=-1000;request();}
+ function resize(force=false){surfaceWidth=Math.max(1,back.clientWidth);surfaceHeight=Math.max(1,back.clientHeight);layers.forEach(layer=>layer?.resize(force));aurora?.resize(force);lastMasks=-1000;request();}
  function dispose(){
   if(disposed)return;disposed=true;controller.abort();textObserver.disconnect();visibleText.clear();if(raf)cancelAnimationFrame(raf);layers.forEach(layer=>layer?.dispose());layers=[];aurora?.dispose();back.remove();front.remove();if(!sharedInput)input.dispose();
  }
- on(window,'resize',()=>resize());on(window,'particle-config-change',()=>resize(true));
  on(document,'visibilitychange',()=>{previous=0;if(document.hidden&&raf){cancelAnimationFrame(raf);raf=0;}else request();});
  for(const [index,canvas]of[back,front].entries()){
   on(canvas,'webglcontextlost',event=>{event.preventDefault();layers[index]?.dispose();layers[index]=null;if(index===0){aurora?.dispose();aurora=null;}},{passive:false});
   on(canvas,'webglcontextrestored',()=>{layers[index]=createGalaxyRenderer(canvas,index===1);if(index===0)aurora=createAuroraRenderer(back,{shared:true});resize();});
  }
- resize();return {dispose,setReveal(value){for(const element of [back,front])element.style.opacity=String(value);}};
+ resize();return {dispose,resize,setReveal(value){for(const element of [back,front])element.style.opacity=String(value);}};
 }

@@ -5,6 +5,7 @@ export const PARTICLE_CONFIG={
  beamColor:'#3ddc97',beamColorTo:'#3b9eff',beamColorSeconds:11,beamCoreWhite:.93,beamGlowLift:.10,beamDustColor:'#c5ddd4',
  beamStrength:1.12,
  desktopWheelSmoothing:.12,desktopProgressSmoothing:.09,desktopBackgroundFps:30,
+ bangParticleRadius:.0027,bangMobileParticleRadius:.0028,bangMobileSpread:1.25,
  bangHeightVh:290,bangFormationScroll:.82,bangScrollSmoothing:.18,bangSingularityEnd:.10,bangExplosionEnd:.30,bangExpansionEnd:.60,bangAbsorptionEnd:.90,bangFlashIntensity:.65,bangHotA:'#ff6138',bangHotB:'#ffd49a',bangAttraction:1.15,
  desktopRingScale:1.18,mobileLowCount:1000,mobilePixelBudget:350000,mobileLowPixelBudget:150000,mobileMaxDpr:1.2,
  beamVariant:'A',beamParticleCount:2600,mobileBeamCount:1200,mobileLowBeamCount:650,beamDepthRadius:.28,beamDepthRadiusB:.60,beamCoreWidth:.16,beamHdrIntensity:4.0,beamGlowWidth:2.8,beamMist:.008,beamTipFade:.18,

@@ -117,3 +117,21 @@ Los perfiles completos están en `tests/scroll-polish-performance.json`. Son med
 `tests/scroll-polish-results.json` conserva los tests GPU, rueda real hasta 99,8% y regreso a 71,3%, ancla de contacto y dos perfiles con viewport/touch emulados y DPR 2: iPhone 390×844 HDR y Android 412×915 RGBA8, ambos 16,66 ms, sin Long Tasks ni Long Animation Frames. No equivale a probar Safari o teléfonos físicos.
 
 La primera ronda del harness encontró un favicon ausente en páginas de prueba; se agregó su enlace explícito. `tests/scroll-polish-smoke.json` confirma consola limpia, inversión rápida de rueda (467 → 413 px) y recuperación del fondo compartido y del núcleo. Los resultados históricos anteriores permanecen identificados por su iteración.
+
+## Expansión móvil y barra del navegador
+
+Estado anterior: `01a2673`. El presupuesto de partículas móviles no había cambiado: al afinar las esferas finales se había reducido también el tamaño de los puntos del Big Bang. Ahora se separan `bangMobileParticleRadius=0.0028` (su tamaño previo) y el radio fino final de 0.0020. `bangMobileSpread=1.25` amplía la dispersión móvil hacia los bordes; el tamaño y alcance de escritorio se conservan. La absorción mezcla suavemente hacia las C y el remolino originales, también en el respaldo Canvas2D.
+
+El rectángulo aparecía porque el controlador ignoraba cambios de altura de hasta 96 px: el escenario quedaba en la altura inicial mientras las capas fijas respondían al nuevo viewport. `viewport-surface.js` separa tres medidas:
+
+- `svh` fija la referencia del recorrido de scroll.
+- `lvh` dimensiona una superficie continua para el núcleo y ambas capas de fondo/frente.
+- La altura visible de VisualViewport, con fallback `dvh`, ajusta la ventana sticky y sus textos en el siguiente RAF.
+
+Las tres medidas corresponden a los [viewports pequeño, grande y dinámico documentados por MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/length#relative_length_units_based_on_viewport). [VisualViewport.height](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport/height) devuelve la altura visible en píxeles CSS. Se evita confundir pinch zoom con un cambio de layout y se conserva la última medida mientras la pestaña está oculta.
+
+El núcleo y las estrellas usan las mismas dimensiones de superficie y coordenadas de puntero. El cambio de barra revela otra parte de ese mismo canvas, sin reasignar buffers/texturas ni reconstruir las trayectorias. El radio de detalle se compensa con la referencia estable para conservar las partículas finas del núcleo. Una rotación o cambio real de tamaño sí redimensiona los recursos. Se eliminan las dos sondas de medida al desmontar; al volver a la pestaña se revisa el viewport.
+
+Validación: check/build y 33 tests pasaron. `tests/mobile-viewport-results.json` registra seis alturas visibles (844, 885, 932, 855, 932, 844) con `svh=844` y `lvh=932`, progreso estable en 45%, cobertura completa y **cero** reasignaciones de buffers/texturas. Los tests GPU de puntero y de cruce A/B también pasaron. `tests/mobile-viewport-pixels.json` compara 750 filas CSS de capturas corta/larga: diferencia máxima de solo 2/255 por canal de composición, sin desplazamiento de la imagen ni borde geométrico nuevo.
+
+`tests/mobile-viewport-performance.json`: iPhone emulado 390×844 HDR, 17,04 ms medios; Android emulado 412×915 RGBA8, 16,67 ms; cero Long Tasks y errores JS. Son simulaciones de viewport/touch y de toolbar, no comprobaciones en teléfonos físicos. El build de producción local también formó el núcleo sin errores y sin panel de desarrollo.
